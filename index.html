@@ -1,0 +1,2747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prompt Optimizer — Free Claude Users</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,300&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#09090b;--bg2:#111113;--bg3:#18181c;--bg4:#1f1f24;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.12);--border3:rgba(255,255,255,0.2);
+  --text:#f4f0ea;--text2:#9a9692;--text3:#52504e;
+  --accent:#c8f060;--accent2:#b0d848;--adim:rgba(200,240,96,0.07);
+  --red:#ff6b6b;--rdim:rgba(255,107,107,0.07);
+  --blue:#60b8f0;--bdim:rgba(96,184,240,0.07);
+  --amber:#f0c060;--amdim:rgba(240,192,96,0.07);
+  --purple:#b09ef0;--pdim:rgba(176,158,240,0.07);
+  --r:10px;--rl:14px;
+  --shadow:0 1px 3px rgba(0,0,0,.4),0 4px 12px rgba(0,0,0,.3);
+  --shadow-lg:0 2px 8px rgba(0,0,0,.5),0 8px 32px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-height:100vh}
+/* richer grid — two scales, accent tint */
+body::before{content:'';position:fixed;inset:0;
+  background-image:
+    linear-gradient(rgba(200,240,96,0.018) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(200,240,96,0.018) 1px,transparent 1px),
+    linear-gradient(rgba(255,255,255,0.006) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,0.006) 1px,transparent 1px);
+  background-size:160px 160px,160px 160px,40px 40px,40px 40px;
+  pointer-events:none;z-index:0}
+/* subtle radial glow at top */
+body::after{content:'';position:fixed;top:-200px;left:50%;transform:translateX(-50%);
+  width:800px;height:500px;
+  background:radial-gradient(ellipse at center,rgba(200,240,96,0.04) 0%,transparent 70%);
+  pointer-events:none;z-index:0}
+.wrap{position:relative;z-index:1;max-width:840px;margin:0 auto;padding:44px 24px 100px}
+
+/* header */
+h1{font-family:'Fraunces',serif;font-size:32px;font-weight:300;letter-spacing:-.03em;line-height:1.1}
+h1 em{font-style:italic;color:var(--accent);text-shadow:0 0 30px rgba(200,240,96,.3)}
+.sub{font-size:11px;color:var(--text3);margin-top:6px;letter-spacing:.06em}
+.logo-row{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.dot{width:8px;height:8px;background:var(--accent);border-radius:50%;box-shadow:0 0 12px var(--accent);animation:pulse 2.5s infinite}
+.dot.online{background:var(--accent);box-shadow:0 0 12px var(--accent)}
+.dot.offline{background:var(--text3);box-shadow:none;animation:none}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 12px var(--accent)}50%{opacity:.35;box-shadow:0 0 4px var(--accent)}}
+
+/* how-to banner */
+.howto{background:var(--bg2);border:.5px solid var(--border);border-radius:var(--rl);padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;gap:14px}
+.howto-steps{display:flex;gap:10px;flex-wrap:wrap;flex:1}
+.step{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text3)}
+.step-num{width:18px;height:18px;border-radius:50%;background:var(--bg3);border:.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--accent);flex-shrink:0}
+.step-arrow{color:var(--text3);font-size:11px}
+
+/* card */
+.card{background:var(--bg2);border:.5px solid var(--border);border-radius:var(--rl);padding:20px 22px;margin-bottom:12px;transition:border-color .2s,box-shadow .2s;box-shadow:var(--shadow)}
+.card:focus-within{border-color:var(--border2);box-shadow:var(--shadow),0 0 0 1px rgba(200,240,96,.08)}
+.lbl{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text2);margin-bottom:10px;font-weight:500}
+textarea{width:100%;background:transparent;border:none;outline:none;font-family:'DM Mono',monospace;font-size:13px;color:var(--text);line-height:1.8;resize:none;min-height:120px;caret-color:var(--accent)}
+textarea::placeholder{color:var(--text3)}
+.tok-live{font-size:11px;color:var(--text3);margin-top:8px;text-align:right}
+.tok-live span{color:var(--text2)}
+
+/* MODE SELECTOR — the big one */
+.mode-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.mode-card{background:var(--bg2);border:.5px solid var(--border);border-radius:var(--rl);padding:16px;cursor:pointer;transition:all .2s;position:relative;box-shadow:var(--shadow)}
+.mode-card:hover{border-color:var(--border2);transform:translateY(-1px);box-shadow:var(--shadow-lg)}
+.mode-card.selected{border-color:var(--accent);background:var(--adim);box-shadow:var(--shadow),0 0 16px rgba(200,240,96,.1)}
+.mode-card.selected.quality{border-color:var(--blue);background:var(--bdim);box-shadow:var(--shadow),0 0 16px rgba(96,184,240,.1)}
+.mode-card.selected.balanced{border-color:var(--purple);background:var(--pdim);box-shadow:var(--shadow),0 0 16px rgba(176,158,240,.1)}
+.mode-icon{font-size:18px;margin-bottom:6px}
+.mode-name{font-size:12px;color:var(--text);margin-bottom:4px}
+.mode-desc{font-size:10px;color:var(--text3);line-height:1.6}
+.mode-badge{position:absolute;top:10px;right:10px;font-size:9px;padding:2px 7px;border-radius:10px}
+.badge-free{background:var(--adim);color:var(--accent);border:.5px solid rgba(200,240,96,.2)}
+.badge-api{background:var(--bdim);color:var(--blue);border:.5px solid rgba(96,184,240,.2)}
+.badge-both{background:var(--pdim);color:var(--purple);border:.5px solid rgba(176,158,240,.2)}
+.mode-toks{font-size:10px;margin-top:6px;padding-top:6px;border-top:.5px solid var(--border)}
+.tok-save{color:var(--accent)}
+.tok-add{color:var(--red)}
+.tok-mix{color:var(--purple)}
+
+/* PROMPT TYPE */
+.type-row{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
+.ptype{padding:5px 13px;border-radius:20px;border:.5px solid var(--border);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;background:transparent;color:var(--text3);transition:all .15s}
+.ptype:hover{border-color:var(--border2);color:var(--text2)}
+.ptype.on{border-color:var(--accent);color:var(--accent);background:var(--adim)}
+
+/* REPLY LENGTH */
+.reply-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.rlen{padding:5px 13px;border-radius:20px;border:.5px solid var(--border);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;background:transparent;color:var(--text3);transition:all .15s;display:flex;align-items:center;gap:5px}
+.rlen:hover{border-color:var(--border2);color:var(--text2)}
+.rlen.on{border-color:var(--amber);color:var(--amber);background:var(--amdim)}
+.rlen-tok{font-size:10px;color:var(--red)}
+
+/* auto/manual toggle */
+.goal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.goal-toggle{display:flex;background:var(--bg3);border:.5px solid var(--border);border-radius:20px;padding:2px;gap:2px}
+.gtog{padding:4px 14px;border-radius:18px;font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;border:none;background:transparent;color:var(--text3);transition:all .15s;letter-spacing:.04em}
+.gtog.active-manual{background:var(--bg2);color:var(--accent);border:.5px solid rgba(200,240,96,.25)}
+.gtog.active-auto{background:var(--bg2);color:var(--accent);border:.5px solid rgba(200,240,96,.5);box-shadow:0 0 12px rgba(200,240,96,.45),0 0 24px rgba(200,240,96,.2);font-weight:700}
+.gtog.inactive{background:transparent;border:.5px solid transparent}
+.gtog.inactive-auto{background:transparent;color:var(--accent);border:.5px solid rgba(200,240,96,.2);box-shadow:0 0 8px rgba(200,240,96,.2);opacity:.75}
+
+/* popup overlay */
+.popup-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
+.popup-overlay.show{display:flex}
+.popup{background:var(--bg2);border:.5px solid var(--border2);border-radius:var(--rl);padding:26px;max-width:500px;width:100%;position:relative;animation:popIn .25s ease}
+@keyframes popIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+.popup-title{font-family:'Fraunces',serif;font-size:20px;font-weight:300;margin-bottom:4px;color:var(--text)}
+.popup-sub{font-size:11px;color:var(--text3);margin-bottom:18px}
+.popup-close{position:absolute;top:16px;right:16px;background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;line-height:1}
+.popup-close:hover{color:var(--text)}
+.q-block{margin-bottom:16px}
+.q-text{font-size:12px;color:var(--text2);margin-bottom:8px;line-height:1.5}
+.q-opts{display:flex;flex-wrap:wrap;gap:6px}
+.q-opt{padding:5px 13px;border-radius:20px;border:.5px solid var(--border);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;background:transparent;color:var(--text3);transition:all .15s}
+.q-opt:hover{border-color:var(--border2);color:var(--text2)}
+.q-opt.picked{border-color:var(--accent);color:var(--accent);background:var(--adim)}
+.popup-progress{display:flex;gap:4px;margin-bottom:20px}
+.pp-dot{height:3px;flex:1;border-radius:2px;background:var(--bg3);transition:background .3s}
+.pp-dot.done{background:var(--accent)}
+.popup-actions{display:flex;gap:8px;margin-top:18px}
+.popup-btn{padding:9px 20px;border-radius:var(--r);font-family:'DM Mono',monospace;font-size:12px;cursor:pointer;transition:all .15s;border:.5px solid var(--border2);background:transparent;color:var(--text2)}
+.popup-btn:hover{background:var(--bg3);color:var(--text)}
+.popup-btn.primary{background:var(--accent);color:#0e0e0f;border-color:var(--accent)}
+.popup-btn.primary:hover{background:var(--accent2)}
+.popup-btn:disabled{opacity:.35;cursor:not-allowed}
+.result-announce{background:var(--bg3);border:.5px solid rgba(200,240,96,.2);border-radius:var(--r);padding:12px 14px;font-size:12px;color:var(--text2);margin-top:14px;display:none;line-height:1.7}
+.result-announce.show{display:block}
+.result-announce b{color:var(--accent);font-weight:400}
+
+/* file drop */
+.file-drop{border:.5px dashed var(--border2);border-radius:var(--r);padding:14px;text-align:center;cursor:pointer;transition:all .2s}
+.file-drop:hover,.file-drop.drag{border-color:var(--accent);background:var(--adim)}
+.file-drop p{font-size:11px;color:var(--text3)}
+.file-drop em{color:var(--accent);font-style:normal}
+.file-list{margin-top:8px;display:flex;flex-direction:column;gap:5px}
+.file-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:8px;background:var(--bg3);border:.5px solid var(--border);border-radius:var(--r);padding:7px 10px}
+.file-name{font-size:11px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-toks{font-size:10px;color:var(--text3);white-space:nowrap}
+.file-toks b{color:var(--amber)}
+.file-del{background:none;border:none;cursor:pointer;color:var(--text3);font-size:15px;line-height:1;padding:0;transition:color .2s}
+.file-del:hover{color:var(--red)}
+.file-total-row{font-size:11px;color:var(--text3);text-align:right;margin-top:5px}
+.file-total-row b{color:var(--amber)}
+
+/* run */
+.run-wrap{position:relative;margin-bottom:20px}
+.run-btn{width:100%;padding:14px;background:var(--accent);color:#0e0e0f;border:none;border-radius:var(--r);font-family:'DM Mono',monospace;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:.05em;transition:background .3s,color .3s,box-shadow .3s;box-shadow:0 0 20px rgba(200,240,96,.4),0 2px 10px rgba(200,240,96,.25);position:relative;overflow:hidden}
+.run-btn:hover:not(:disabled){background:var(--accent2);transform:translateY(-1px);box-shadow:0 0 32px rgba(200,240,96,.6),0 4px 16px rgba(200,240,96,.35)}
+.run-btn:active:not(:disabled){transform:translateY(0)}
+/* loading state */
+.run-btn.loading{background:#0e0e0f;cursor:default;box-shadow:none;border:.5px solid rgba(200,240,96,.25)}
+.run-btn-fill{position:absolute;left:0;top:0;height:100%;width:0%;background:var(--accent);transition:width .5s ease;z-index:1;border-radius:var(--r);pointer-events:none}
+/* spinning border via conic-gradient pseudo */
+.run-btn.loading::before{content:'';position:absolute;inset:-1.5px;border-radius:calc(var(--r) + 1.5px);background:conic-gradient(from 0deg,transparent 70%,rgba(200,240,96,.7) 85%,rgba(200,240,96,1) 90%,rgba(200,240,96,.7) 95%,transparent 100%);animation:borderSpin 2.8s linear infinite;z-index:0}
+.run-btn.loading::after{content:'';position:absolute;inset:1.5px;border-radius:calc(var(--r) - 1px);background:#0e0e0f;z-index:1}
+@keyframes borderSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.run-text{position:relative;z-index:2;pointer-events:none;user-select:none}
+/* empty area text — accent colored, hidden behind fill */
+.run-text-empty{color:var(--accent)}
+/* filled area text — dark, clipped to fill width */
+.run-text-filled{
+  position:absolute;left:0;top:0;width:100%;height:100%;
+  display:flex;align-items:center;justify-content:center;
+  color:#0e0e0f;z-index:3;
+  clip-path:inset(0 100% 0 0);
+  transition:clip-path .5s ease;
+  pointer-events:none;
+}
+/* percentage bar below button */
+
+
+/* output */
+.output{display:none;animation:up .3s ease}
+.output.show{display:block}
+@keyframes up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+/* scrollbar */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--border2)}
+/* selection */
+::selection{background:rgba(200,240,96,.2);color:var(--text)}
+/* diff colors upgrade */
+.diff-add{background:rgba(200,240,96,.12);color:var(--accent);border-radius:3px;padding:1px 2px}
+.diff-rem{background:rgba(255,107,107,.1);color:var(--red);text-decoration:line-through;border-radius:3px;padding:1px 2px;opacity:.65}
+.divider{height:.5px;background:var(--border);margin:6px 0 20px}
+
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-bottom:16px}
+.stat{background:var(--bg2);border:.5px solid var(--border);border-radius:var(--r);padding:11px 12px}
+.stat-lbl{font-size:9px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px}
+.stat-val{font-size:20px;font-weight:300;color:var(--text);font-family:'Fraunces',serif;letter-spacing:-.01em}
+.stat-val.green{color:var(--accent)}
+.stat-val.amber{color:var(--amber)}
+.stat-val.red{color:var(--red)}
+.stat-val.blue{color:var(--blue)}
+
+/* comparison */
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.compare-box{border:.5px solid var(--border);border-radius:var(--r);overflow:hidden}
+.compare-head{font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:7px 12px;background:var(--bg3);border-bottom:.5px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap;gap:8px;white-space:nowrap}
+.compare-head span{color:var(--text3)}
+.compare-head .tok-count{color:var(--text2);font-size:10px}
+.compare-body{padding:14px 16px;font-size:12px;line-height:1.85;color:var(--text2);white-space:pre-wrap;word-break:break-word;min-height:60px;background:var(--bg2);max-height:220px;overflow-y:auto}
+.compare-body.optimized{color:var(--text)}
+
+/* chips */
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px}
+.chip{font-size:10px;padding:3px 9px;border-radius:20px;background:var(--bg3);border:.5px solid var(--border);color:var(--text3)}
+.chip.g{border-color:rgba(200,240,96,.25);color:var(--accent)}
+.chip.b{border-color:rgba(96,184,240,.25);color:var(--blue)}
+.chip.a{border-color:rgba(240,192,96,.25);color:var(--amber)}
+.chip.p{border-color:rgba(176,158,240,.25);color:var(--purple)}
+.chip.r{border-color:rgba(255,107,107,.25);color:var(--red)}
+
+/* changes */
+.changes{border:.5px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:12px}
+.chg-head{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);padding:8px 12px;background:var(--bg3);border-bottom:.5px solid var(--border)}
+.chg-item{display:flex;gap:9px;align-items:flex-start;padding:8px 12px;border-bottom:.5px solid var(--border);font-size:11px;color:var(--text2)}
+.chg-item:last-child{border-bottom:none}
+.ctag{font-size:9px;padding:2px 7px;border-radius:8px;white-space:nowrap;flex-shrink:0;margin-top:1px}
+.ctag.removed{background:var(--rdim);color:var(--red);border:.5px solid rgba(255,107,107,.2)}
+.ctag.fixed{background:var(--adim);color:var(--accent);border:.5px solid rgba(200,240,96,.2)}
+.ctag.added{background:var(--bdim);color:var(--blue);border:.5px solid rgba(96,184,240,.2)}
+.ctag.rewritten{background:var(--amdim);color:var(--amber);border:.5px solid rgba(240,192,96,.2)}
+
+/* actions */
+.actions{display:flex;gap:8px;margin-bottom:24px}
+.act{padding:8px 16px;border-radius:var(--r);border:.5px solid var(--border2);background:transparent;font-family:'DM Mono',monospace;font-size:12px;color:var(--text2);cursor:pointer;transition:all .15s}
+.act:hover{background:var(--bg3);color:var(--text)}
+.act.accent{background:var(--accent);color:#0e0e0f;border-color:var(--accent);font-weight:700;box-shadow:0 0 14px rgba(200,240,96,.4),0 2px 6px rgba(200,240,96,.2)}
+.act.accent:hover{background:var(--accent2);box-shadow:0 0 24px rgba(200,240,96,.6),0 3px 12px rgba(200,240,96,.3);transform:translateY(-1px)}
+
+/* MESSAGE VALUE */
+.msg-value{background:var(--bg2);border:.5px solid rgba(200,240,96,.15);border-radius:var(--r);padding:12px 16px;margin-bottom:12px;font-size:11px;color:var(--text3);line-height:1.8}
+.msg-value b{color:var(--accent);font-weight:400}
+
+/* TIPS SECTION */
+.tips-section{background:var(--bg2);border:.5px solid var(--border);border-radius:var(--rl);padding:20px;margin-top:16px}
+.tips-title{font-family:'Fraunces',serif;font-size:22px;font-weight:300;color:var(--text);margin-bottom:20px;letter-spacing:-.01em}
+.section-title{font-family:'Fraunces',serif;font-size:17px;font-weight:300;color:var(--text);margin:22px 0 10px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:.5px solid var(--border)}
+.tips-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tip-card{background:var(--bg3);border:.5px solid var(--border);border-radius:var(--r);padding:12px 14px}
+.tip-head{font-size:11px;color:var(--text);margin-bottom:6px;padding-bottom:6px;border-bottom:.5px solid var(--border);display:flex;align-items:center;gap:7px}
+.tip-badge{font-size:9px;padding:2px 7px;border-radius:8px;flex-shrink:0}
+.tip-body{font-size:11px;color:var(--text3);line-height:1.7}
+.tip-body b{color:var(--text2);font-weight:400}
+.tip-example{margin-top:8px;padding:7px 10px;background:var(--bg2);border-radius:var(--r);font-size:10px;line-height:1.7;border-left:2px solid var(--border2)}
+.tip-example .bad{color:var(--red)}
+.tip-example .good{color:var(--accent)}
+
+/* XML explainer */
+.xml-explainer{background:var(--bg3);border:.5px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-top:10px}
+.xml-row{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:.5px solid var(--border);font-size:11px}
+.xml-row:last-child{border-bottom:none}
+.xml-tag{font-family:'DM Mono',monospace;color:var(--blue);font-size:11px;white-space:nowrap;flex-shrink:0;width:130px}
+.xml-desc{color:var(--text3);line-height:1.6}
+.xml-tok{color:var(--amber);font-size:10px;white-space:nowrap;margin-left:auto;flex-shrink:0}
+
+/* token table */
+.tok-table{width:100%;border-collapse:collapse;font-size:11px}
+.tok-table th{text-align:left;color:var(--text3);font-weight:400;padding:5px 8px;border-bottom:.5px solid var(--border);letter-spacing:.05em;font-size:10px;text-transform:uppercase}
+.tok-table td{padding:5px 8px;border-bottom:.5px solid var(--border);color:var(--text2);vertical-align:top}
+.tok-table tr:last-child td{border-bottom:none}
+.hi{color:var(--accent)}.warn{color:var(--amber)}.bad2{color:var(--red)}
+
+/* plan cards */
+.plan-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.plan-card{background:var(--bg3);border:.5px solid var(--border);border-radius:var(--r);padding:11px 13px}
+.plan-name{font-size:11px;color:var(--text);margin-bottom:4px}
+.plan-badge{display:inline-block;font-size:9px;padding:2px 7px;border-radius:8px;margin-bottom:7px}
+.pb-free{background:var(--adim);color:var(--accent);border:.5px solid rgba(200,240,96,.2)}
+.pb-pro{background:var(--pdim);color:var(--purple);border:.5px solid rgba(176,158,240,.2)}
+.pb-api{background:var(--bdim);color:var(--blue);border:.5px solid rgba(96,184,240,.2)}
+.plan-row{display:flex;justify-content:space-between;font-size:10px;color:var(--text3);padding:3px 0;border-bottom:.5px solid var(--border)}
+.plan-row:last-child{border-bottom:none}
+.plan-row span{color:var(--text2)}
+
+.section-title{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin:16px 0 10px}
+.note-box{background:var(--bg3);border:.5px solid var(--border);border-radius:var(--r);padding:11px 13px;font-size:11px;color:var(--text3);line-height:1.8;margin-top:10px}
+.note-box b{color:var(--amber);font-weight:400}
+/* diff colors */
+.diff-add{background:rgba(200,240,96,.15);color:var(--accent);border-radius:2px;padding:0 1px}
+.diff-rem{background:rgba(255,107,107,.12);color:var(--red);text-decoration:line-through;border-radius:2px;padding:0 1px;opacity:.7}
+/* history */
+.hist-item{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg3);border:.5px solid var(--border);border-radius:var(--r);cursor:pointer;transition:border-color .15s}
+.hist-item:hover{border-color:var(--border2)}
+.hist-text{flex:1;font-size:11px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hist-tok{font-size:10px;color:var(--text3);white-space:nowrap}
+/* prescan */
+.scan-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;border-radius:10px;cursor:default}
+.scan-ok{background:var(--adim);color:var(--accent);border:.5px solid rgba(200,240,96,.2)}
+.scan-warn{background:var(--amdim);color:var(--amber);border:.5px solid rgba(240,192,96,.2)}
+.scan-bad{background:var(--rdim);color:var(--red);border:.5px solid rgba(255,107,107,.2)}
+
+.err{background:var(--rdim);border:.5px solid rgba(255,107,107,.2);border-radius:var(--r);padding:10px 14px;font-size:12px;color:var(--red);margin-bottom:12px;display:none}
+.err.show{display:block}
+footer{position:relative;z-index:1;text-align:center;padding:20px;font-size:11px;color:var(--text3)}
+footer a{color:var(--text3);text-decoration:none}
+footer a:hover{color:var(--text2)}
+
+@media(max-width:640px){
+  h1{font-size:22px}
+  .mode-grid{grid-template-columns:1fr}
+  .stats{grid-template-columns:repeat(3,1fr)}
+  .stats .stat:nth-child(4),.stats .stat:nth-child(5){grid-column:span 1}
+  .compare{grid-template-columns:1fr}
+  .tips-grid{grid-template-columns:1fr}
+  .plan-grid{grid-template-columns:1fr}
+  .wrap{padding:28px 16px 60px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HEADER -->
+  <header style="margin-bottom:28px;padding-bottom:24px;border-bottom:.5px solid var(--border)">
+    <div class="logo-row">
+      <div class="dot"></div>
+      <span id="statusLabel" style="font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase">checking connection…</span>
+    </div>
+    <h1>Prompt <em>Optimizer</em></h1>
+    <p class="sub">Built for free Claude users — make every message count</p>
+    <div style="margin-top:14px;height:1px;background:linear-gradient(90deg,rgba(200,240,96,.35) 0%,rgba(200,240,96,.05) 60%,transparent 100%);box-shadow:0 0 12px rgba(200,240,96,.15)"></div>
+  </header>
+
+  <!-- HOW TO USE -->
+  <div class="howto">
+    <div class="howto-steps">
+      <div class="step"><div class="step-num">1</div><span>Paste your rough prompt below</span></div>
+      <div class="step-arrow">→</div>
+      <div class="step"><div class="step-num">2</div><span>Pick your goal + prompt type</span></div>
+      <div class="step-arrow">→</div>
+      <div class="step"><div class="step-num">3</div><span>Click Optimize</span></div>
+      <div class="step-arrow">→</div>
+      <div class="step"><div class="step-num">4</div><span>Copy → paste into claude.ai</span></div>
+    </div>
+  </div>
+
+  <!-- PROMPT INPUT -->
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="lbl" style="margin-bottom:0">Your prompt</div>
+      <button class="act" style="font-size:10px;padding:3px 10px" onclick="toggleTemplates()">templates</button>
+    </div>
+    <!-- Templates drawer -->
+    <div id="templatesDrawer" style="display:none;margin-bottom:10px">
+      <div style="display:flex;flex-wrap:wrap;gap:5px" id="templateBtns"></div>
+    </div>
+    <textarea id="promptIn" oninput="liveTokens();preScan()" placeholder="Paste anything — messy, informal, rambling, typos welcome... (Ctrl+Enter to optimize)"></textarea>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
+      <div id="preScanBadge" style="font-size:10px;color:var(--text3)"></div>
+      <div class="tok-live" id="tokLive">tokens: <span>0</span> · words: <span>0</span> · chars: <span>0</span></div>
+    </div>
+  </div>
+
+  <!-- ML MODE BANNER -->
+  <div style="background:var(--bg2);border:.5px solid var(--border);border-radius:var(--r);margin-bottom:12px;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 14px">
+      <button id="mlBtn" onclick="toggleML()" style="flex-shrink:0;padding:5px 14px;background:var(--bg3);border:.5px solid var(--border2);border-radius:var(--r);font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--text);cursor:pointer;transition:all .2s;letter-spacing:.04em">✦ ML</button>
+      <span style="font-size:11px;color:var(--text3);line-height:1.5;flex:1">If you want a better optimizing experience you can use this — but it'll take longer to load. Uses a real ML model running in your browser.</span>
+      <div id="mlStatus" style="flex-shrink:0;font-size:10px;color:var(--text3);white-space:nowrap"></div>
+    </div>
+    <!-- Live loading panel — hidden until ML clicked -->
+    <div id="mlLoadPanel" style="display:none;padding:0 14px 12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <span id="mlLoadStep" style="font-size:10px;color:var(--text2)">initialising…</span>
+        <span id="mlLoadPct" style="font-size:10px;color:var(--accent);font-family:'Fraunces',serif"></span>
+      </div>
+      <div style="height:3px;background:var(--bg3);border-radius:3px;overflow:hidden">
+        <div id="mlProgressBar" style="height:100%;width:0%;background:var(--accent);border-radius:3px;transition:width .3s ease;box-shadow:0 0 8px rgba(200,240,96,.4)"></div>
+      </div>
+      <div id="mlLoadDetail" style="font-size:9px;color:var(--text3);margin-top:5px;letter-spacing:.04em"></div>
+    </div>
+  </div>
+
+  <!-- AUTO POPUP MODAL -->
+  <div class="popup-overlay" id="autoPopup">
+    <div class="popup">
+      <button class="popup-close" onclick="closePopup()">×</button>
+      <div class="popup-title">Let's find your best mode</div>
+      <div class="popup-sub">Answer 4 quick questions — takes 10 seconds</div>
+      <div class="popup-progress" id="popProgress">
+        <div class="pp-dot done"></div>
+        <div class="pp-dot"></div>
+        <div class="pp-dot"></div>
+        <div class="pp-dot"></div>
+      </div>
+      <div id="popQuestions"></div>
+      <div class="result-announce" id="popResult"></div>
+      <div class="popup-actions">
+        <button class="popup-btn" id="popBack" onclick="popNav(-1)" disabled>← Back</button>
+        <button class="popup-btn primary" id="popNext" onclick="popNav(1)">Next →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODE SELECTOR -->
+  <div class="goal-header">
+    <div class="lbl" style="margin-bottom:0">What's your goal?</div>
+    <div class="goal-toggle">
+      <button class="gtog inactive-auto" id="togAuto" onclick="openAutoPopup()">✦ Auto</button>
+      <button class="gtog active-manual" id="togManual" onclick="setManual()">Manual</button>
+    </div>
+  </div>
+  <div class="mode-grid" id="modeGrid">
+    <div class="mode-card selected" data-mode="save" onclick="selectMode('save')">
+      <div class="mode-badge badge-free">★ best for free plan</div>
+      <div class="mode-icon">⚡</div>
+      <div class="mode-name">Save tokens</div>
+      <div class="mode-desc">Strip everything down. Compress hard. Spend the fewest tokens possible — ideal if you're on the free plan watching your daily message count.</div>
+      <div class="mode-toks"><span class="tok-save">↓ removes 20–50% of tokens</span> — nothing added</div>
+    </div>
+    <div class="mode-card balanced" data-mode="balanced" onclick="selectMode('balanced')">
+      <div class="mode-badge badge-both">best of both</div>
+      <div class="mode-icon">⚖</div>
+      <div class="mode-name">Balanced</div>
+      <div class="mode-desc">Save tokens on fluff, spend a few on clarity. Best for most everyday prompts.</div>
+      <div class="mode-toks"><span class="tok-save">↓ saves tokens</span> + <span class="tok-add">↑ adds ~15–30 for quality</span></div>
+    </div>
+    <div class="mode-card quality" data-mode="quality" onclick="selectMode('quality')">
+      <div class="mode-badge badge-api">best results</div>
+      <div class="mode-icon">✦</div>
+      <div class="mode-name">Max quality</div>
+      <div class="mode-desc">Apply all Anthropic techniques. Spends more tokens but gets dramatically better responses.</div>
+      <div class="mode-toks"><span class="tok-add">↑ adds 30–80 tokens</span> — worth it for complex tasks</div>
+    </div>
+  </div>
+
+  <!-- PROMPT TYPE -->
+  <div class="lbl" style="margin-bottom:8px">Prompt type <span style="color:var(--text3);font-size:10px">(optional — helps with role + format)</span></div>
+  <div class="type-row" id="typeRow">
+    <button class="ptype" data-type="coding">coding / debug</button>
+    <button class="ptype" data-type="writing">writing / essay</button>
+    <button class="ptype" data-type="explain">explain / teach</button>
+    <button class="ptype" data-type="analyze">analyze / research</button>
+    <button class="ptype" data-type="creative">creative / story</button>
+    <button class="ptype" data-type="email">email / message</button>
+    <button class="ptype" data-type="summary">summarize</button>
+    <button class="ptype" data-type="list">make a list</button>
+    <button class="ptype" data-type="gamedev">game dev</button>
+    <button class="ptype" data-type="data">data / json</button>
+  </div>
+
+  <!-- REPLY LENGTH -->
+  <div class="lbl" style="margin-bottom:8px">Expected reply length <span style="color:var(--text3);font-size:10px">(reply tokens count too!)</span></div>
+  <div class="reply-row" id="replyRow">
+    <button class="rlen on" data-len="auto">auto <span class="rlen-tok">let Claude decide</span></button>
+    <button class="rlen" data-len="short">short <span class="rlen-tok">~50–150 tok</span></button>
+    <button class="rlen" data-len="medium">medium <span class="rlen-tok">~150–400 tok</span></button>
+    <button class="rlen" data-len="long">long <span class="rlen-tok">~400–1000 tok</span></button>
+    <button class="rlen" data-len="exact1">1 sentence <span class="rlen-tok">~20 tok</span></button>
+    <button class="rlen" data-len="bullet">bullet points <span class="rlen-tok">~100–200 tok</span></button>
+  </div>
+
+  <!-- FILES -->
+  <div class="card">
+    <div class="lbl">Attach files — live token cost</div>
+    <div class="file-drop" id="dropZone" onclick="document.getElementById('fileIn').click()"
+         ondragover="doDragOver(event)" ondragleave="doDragLeave()" ondrop="doDrop(event)">
+      <p>Drop files here or <em>click to browse</em></p>
+      <p style="margin-top:2px;font-size:10px">txt · md · json · csv · js · py · html · log</p>
+      <input type="file" id="fileIn" multiple style="display:none" onchange="addFiles(this.files)">
+    </div>
+    <div class="file-list" id="fileList"></div>
+    <div class="file-total-row" id="fileTotalRow" style="display:none">Total file tokens: <b id="fileTokTotal">0</b></div>
+  </div>
+
+  <div class="err" id="err"></div>
+  <div class="run-wrap" id="runWrap" style="margin-bottom:20px">
+    <button class="run-btn" id="runBtn" onclick="optimize()" style="margin-bottom:0">
+      <span id="runBtnInnerFill" class="run-btn-fill"></span>
+      <!-- text shown over empty (dark) area -->
+      <span id="runBtnText" class="run-text run-text-empty">→ Optimize Prompt</span>
+      <!-- text shown over filled (green) area — clipped -->
+      <span id="runBtnTextFilled" class="run-text run-text-filled" aria-hidden="true">→ Optimize Prompt</span>
+    </button>
+  </div>
+
+  <!-- OUTPUT -->
+  <div class="output" id="output">
+    <div class="divider"></div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-lbl">Original</div><div class="stat-val" id="sOrig">—</div></div>
+      <div class="stat"><div class="stat-lbl">Optimized</div><div class="stat-val" id="sOpt">—</div></div>
+      <div class="stat"><div class="stat-lbl">Saved</div><div class="stat-val green" id="sSaved">—</div></div>
+      <div class="stat"><div class="stat-lbl">Spell fixes</div><div class="stat-val amber" id="sSpell">—</div></div>
+      <div class="stat"><div class="stat-lbl">Est. reply</div><div class="stat-val blue" id="sReply">—</div></div>
+    </div>
+
+    <!-- message value estimate -->
+    <div class="msg-value" id="msgValue"></div>
+
+    <!-- SIDE BY SIDE DIFF -->
+    <div class="compare">
+      <div class="compare-box">
+        <div class="compare-head"><span>Original</span><span class="tok-count" id="cOrigTok"></span></div>
+        <div class="compare-body" id="compareOrig"></div>
+      </div>
+      <div class="compare-box">
+        <div class="compare-head" style="justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span id="cOptLabel">Optimized</span>
+            <span id="cDiffHint" style="font-size:9px;color:var(--text3)">(green=added · red=removed)</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="tok-count" id="cOptTok"></span>
+    <button id="eyeBtn" onclick="toggleDiffView()" title="Toggle diff highlights" style="background:none;border:none;cursor:pointer;padding:2px 4px;border-radius:4px;font-size:13px;line-height:1;color:var(--accent);transition:opacity .15s;position:relative">👁<span id="eyeStrike" style="display:none;position:absolute;left:50%;top:50%;width:110%;height:1.5px;background:var(--text2);transform:translate(-50%,-50%) rotate(-45deg);border-radius:1px;pointer-events:none"></span></button>
+          </div>
+        </div>
+        <div class="compare-body optimized" id="compareOpt"></div>
+      </div>
+    </div>
+
+    <div class="chips" id="chipsRow"></div>
+
+    <!-- Quality score -->
+    <div id="qualityScore" style="display:none;background:var(--bg3);border:.5px solid var(--border);border-radius:var(--r);padding:10px 14px;margin-bottom:12px;font-size:11px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <span style="color:var(--text3)">Prompt quality score</span>
+        <div id="scoreBar" style="flex:1;height:4px;background:var(--bg2);border-radius:2px;overflow:hidden"><div id="scoreBarFill" style="height:100%;border-radius:2px;transition:width .4s"></div></div>
+        <span id="scoreVal" style="font-family:'Fraunces',serif;font-size:16px;color:var(--text)">—</span>
+      </div>
+      <div id="scoreDetails" style="color:var(--text3);line-height:1.7"></div>
+    </div>
+
+    <!-- Changes list — hidden when eye is off -->
+    <div id="changesWrap">
+      <div class="changes" id="changesList"></div>
+    </div>
+
+    <div class="actions">
+      <button class="act accent" id="copyBtn" onclick="copyResult()">Copy optimized</button>
+      <button class="act" onclick="downloadResult()">Download .txt</button>
+      <button class="act" id="undoBtn" onclick="undoOptimize()" style="display:none">Restore original</button>
+      <button class="act" onclick="clearAll()">Clear</button>
+    </div>
+
+    <!-- History -->
+    <div id="historyRow" style="display:none;margin-top:12px">
+      <div style="font-size:10px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">Recent prompts</div>
+      <div id="historyList" style="display:flex;flex-direction:column;gap:4px"></div>
+    </div>
+
+  <!-- ═══════════════ TIPS SECTION ═══════════════ -->
+  <div class="tips-section" style="margin-top:28px">
+    <div class="tips-title">Tips — from Anthropic's official docs + token facts</div>
+
+    <div class="section-title">Prompt tips</div>
+    <div class="tips-grid">
+
+      <div class="tip-card">
+        <div class="tip-head">
+          Direct action verbs
+          <span class="tip-badge badge-free">saves tokens</span>
+        </div>
+        <div class="tip-body">Start with the verb. Claude responds better to commands than to polite requests. Skip the preamble entirely.
+          <div class="tip-example">
+            <div class="bad">✕ "Could you help me write an email to my boss about..."</div>
+            <div class="good">✓ "Write an email to my boss about..."</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <div class="tip-head">
+          Say how deep you want it
+          <span class="tip-badge badge-api" style="background:var(--rdim);color:var(--red);border-color:rgba(255,107,107,.2)">adds tokens</span>
+        </div>
+        <div class="tip-body">Claude 4.x won't go "above and beyond" unless you explicitly ask. Vague adjectives like "good" or "proper" are ignored.
+          <div class="tip-example">
+            <div class="bad">✕ "Write a good summary"</div>
+            <div class="good">✓ "Write a summary. Be thorough, cover all key points."</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <div class="tip-head">
+          Give Claude permission to say idk
+          <span class="tip-badge badge-free">saves tokens</span>
+        </div>
+        <div class="tip-body">Without this, Claude will guess and fill gaps with hallucinated info. One sentence prevents this.
+          <div class="tip-example">
+            <div class="bad">✕ "What is the exact population of Chennai?"</div>
+            <div class="good">✓ "What is the population of Chennai? If unsure, say so."</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <div class="tip-head">
+          Add context / motivation
+          <span class="tip-badge badge-both" style="background:var(--pdim);color:var(--purple);border-color:rgba(176,158,240,.2)">worth it</span>
+        </div>
+        <div class="tip-body">Explaining <b>why</b> you need something helps Claude make better decisions about related choices automatically.
+          <div class="tip-example">
+            <div class="bad">✕ "Don't use bullet points"</div>
+            <div class="good">✓ "No bullet points — I need flowing prose for a formal document"</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <div class="tip-head">
+          Chain-of-thought for hard tasks
+          <span class="tip-badge badge-api" style="background:var(--rdim);color:var(--red);border-color:rgba(255,107,107,.2)">adds tokens</span>
+        </div>
+        <div class="tip-body">Adding "think step by step" makes Claude reason before answering. Costs more tokens in the reply but gets better accuracy on math, logic, code.
+          <div class="tip-example">
+            <div class="bad">✕ Use for: simple factual questions</div>
+            <div class="good">✓ Use for: debugging, calculations, multi-step plans</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tip-card">
+        <div class="tip-head">
+          Use examples (few-shot)
+          <span class="tip-badge badge-api" style="background:var(--rdim);color:var(--red);border-color:rgba(255,107,107,.2)">adds tokens</span>
+        </div>
+        <div class="tip-body">One example is worth more than a paragraph of description. Show Claude the format/style you want instead of describing it.
+          <div class="tip-example">
+            <div class="bad">✕ "Write in a casual but professional tone"</div>
+            <div class="good">✓ "Match this tone: 'Hey! Quick update on the project...'"</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- XML tags explained -->
+    <div class="section-title">What are XML tags — and when do they cost tokens?</div>
+    <div class="xml-explainer">
+      <div class="xml-row">
+        <span class="xml-tag">&lt;context&gt;</span>
+        <span class="xml-desc">Background info Claude needs before the task. Helps it understand your situation.</span>
+        <span class="xml-tok">+4 tok</span>
+      </div>
+      <div class="xml-row">
+        <span class="xml-tag">&lt;instructions&gt;</span>
+        <span class="xml-desc">The actual task. Claude treats this as the primary directive.</span>
+        <span class="xml-tok">+6 tok</span>
+      </div>
+      <div class="xml-row">
+        <span class="xml-tag">&lt;example&gt;</span>
+        <span class="xml-desc">Show Claude the format/style you want. One example outperforms long descriptions.</span>
+        <span class="xml-tok">+4 tok</span>
+      </div>
+      <div class="xml-row">
+        <span class="xml-tag">&lt;constraints&gt;</span>
+        <span class="xml-desc">Rules Claude must follow — word limit, tone, audience, format.</span>
+        <span class="xml-tok">+5 tok</span>
+      </div>
+      <div class="xml-row">
+        <span class="xml-tag">&lt;files&gt;</span>
+        <span class="xml-desc">References attached files by name so Claude knows what to look at.</span>
+        <span class="xml-tok">+3 tok</span>
+      </div>
+      <div class="xml-row">
+        <span class="xml-tag">&lt;thinking&gt;</span>
+        <span class="xml-desc">Tells Claude to reason inside this tag before answering. Used with chain-of-thought.</span>
+        <span class="xml-tok">+4 tok</span>
+      </div>
+    </div>
+    <div class="note-box" style="margin-top:8px">
+      <b>Total cost of full XML structure: ~25–30 tokens.</b> That's roughly the same as one extra sentence of filler text. Worth it for complex prompts — skip it for simple one-liners.
+    </div>
+
+    <!-- Reply tokens -->
+    <div class="section-title">Reply tokens — yes, Claude's answer costs tokens too</div>
+    <table class="tok-table">
+      <thead><tr><th>What you ask for</th><th>Typical reply tokens</th><th>Impact on free plan</th></tr></thead>
+      <tbody>
+        <tr><td>"one sentence answer"</td><td class="hi">~20–40</td><td class="hi">minimal</td></tr>
+        <tr><td>"bullet point list"</td><td class="hi">~80–150</td><td class="hi">low</td></tr>
+        <tr><td>"short paragraph"</td><td class="hi">~100–200</td><td class="hi">low</td></tr>
+        <tr><td>no instruction (Claude decides)</td><td class="warn">~200–500</td><td class="warn">medium</td></tr>
+        <tr><td>"detailed explanation"</td><td class="warn">~400–800</td><td class="warn">medium-high</td></tr>
+        <tr><td>"comprehensive guide"</td><td class="bad2">~800–2000</td><td class="bad2">high</td></tr>
+        <tr><td>"write a full essay"</td><td class="bad2">~1000–3000</td><td class="bad2">very high</td></tr>
+        <tr><td>asking Claude to write code</td><td class="bad2">~500–5000</td><td class="bad2">depends on complexity</td></tr>
+      </tbody>
+    </table>
+    <div class="note-box" style="margin-top:8px">
+      <b>Key insight:</b> On the free plan, a single prompt asking for "a detailed 1000-word essay" might use as many tokens as 5–10 short Q&amp;A messages combined. The reply is usually 3–10× more tokens than the prompt. Always specify reply length if you're watching your budget.
+    </div>
+
+    <!-- Plans -->
+    <div class="section-title">Claude plans &amp; context window</div>
+    <div class="plan-grid">
+      <div class="plan-card">
+        <div class="plan-name">Free</div>
+        <div class="plan-badge pb-free">claude.ai</div>
+        <div class="plan-row">Context window <span>200K tokens</span></div>
+        <div class="plan-row">Daily messages <span>~20–40</span></div>
+        <div class="plan-row">Models <span>Sonnet</span></div>
+        <div class="plan-row">Cost <span>$0</span></div>
+      </div>
+      <div class="plan-card">
+        <div class="plan-name">Pro</div>
+        <div class="plan-badge pb-pro">$20/month</div>
+        <div class="plan-row">Context window <span>200K tokens</span></div>
+        <div class="plan-row">Daily messages <span>5× more</span></div>
+        <div class="plan-row">Models <span>Sonnet + Opus</span></div>
+        <div class="plan-row">Priority access <span>yes</span></div>
+      </div>
+      <div class="plan-card">
+        <div class="plan-name">API</div>
+        <div class="plan-badge pb-api">console.anthropic.com</div>
+        <div class="plan-row">Context window <span>200K tokens</span></div>
+        <div class="plan-row">Input cost <span>~$0.003/1K</span></div>
+        <div class="plan-row">Output cost <span>~$0.015/1K</span></div>
+        <div class="plan-row">Free credits <span>$5 on signup</span></div>
+      </div>
+    </div>
+    <div class="note-box" style="margin-top:8px">
+      <b>Context window = prompt + reply combined.</b> 200K tokens ≈ 150,000 words ≈ 3 full novels. You'll almost never hit the context limit in a single message — the daily message count is the real constraint on the free plan, not token size.
+    </div>
+
+    <!-- File formats -->
+    <div class="section-title">File token costs by format</div>
+    <table class="tok-table">
+      <thead><tr><th>Format</th><th>1 KB</th><th>10 KB</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>.txt / .log</td><td class="hi">~170</td><td class="hi">~1,700</td><td>Most efficient — plain text</td></tr>
+        <tr><td>.md</td><td class="hi">~160</td><td class="hi">~1,600</td><td>Slightly less (formatting stripped)</td></tr>
+        <tr><td>.py / .js</td><td class="hi">~180</td><td class="warn">~1,800</td><td>More punctuation = slightly more tokens</td></tr>
+        <tr><td>.json</td><td class="warn">~200</td><td class="warn">~2,000</td><td>Brackets + quotes are expensive</td></tr>
+        <tr><td>.html</td><td class="bad2">~220</td><td class="bad2">~2,200</td><td>Tags are very token-heavy — convert to txt first</td></tr>
+      </tbody>
+    </table>
+
+  </div><!-- /tips -->
+
+</div><!-- /wrap -->
+<footer>
+  No API · No internet required · Prompts never leave your device ·
+  <a href="https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview" target="_blank">Anthropic prompt docs ↗</a>
+</footer>
+
+<script>
+// ═══════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════
+let currentMode = 'save';
+let currentType = null;
+let currentLen  = 'auto';
+
+// ═══════════════════════════════════════════
+//  SPELL DICTIONARY
+// ═══════════════════════════════════════════
+const SPELL = {
+  lst:'last',ike:'like',liek:'like',
+  uk:'',wat:'',hmm:'',umm:'',ugh:'',hm:'',
+  thankyou:'',thankyu:'',thnx:'',thks:'',thx:'',
+  // transposed letters (very common mobile/fast typing errors)
+  mkae:'make',amke:'make',maek:'make',
+  thnig:'thing',thign:'thing',thiing:'thing',
+  tihngy:'thingy',htings:'things',
+  lkie:'like',liek:'like',
+  suond:'sound',
+  yeras:'years',eyars:'years',
+  knosw:'knows',konws:'knows',
+  surem:'sure',msure:'sure',
+  wierd:'weird',
+  dotn:"don't",dnot:"don't",
+  mkae:'make',
+  srue:'sure',sruel:'sure',
+  palce:'place',
+  peopel:'people',peolpe:'people',
+  becuase:'because',becasue:'because',becuse:'because',
+  untill:'until',untile:'until',
+  alot:'a lot',
+  adn:'and',nad:'and',
+  teh:'the',hte:'the',
+  jsut:'just',juts:'just',
+  form:'from',fomr:'from',frmo:'from',
+  recieve:'receive',beleive:'believe',
+  seperate:'separate',
+  definately:'definitely',defintely:'definitely',
+  occured:'occurred',
+  realy:'really',
+  litterally:'literally',literaly:'literally',
+  // internet slang → remove (empty = stripped by spell)
+  lol:'',lmao:'',lmfao:'',omg:'',omfg:'',wtf:'',smh:'',bruh:'',
+  ngl:'',tbh:'',imo:'',imho:'',irl:'',fwiw:'',
+  ya:'you',u:'you',ur:'your',
+  cuz:'because',cos:'because',bc:'because',
+  gonna:'going to',gotta:'got to',wanna:'want to',
+  hafta:'have to',kinda:'kind of',sorta:'sort of',
+  ya:"",yea:'',yah:'',nah:'',meh:'',
+  arcadey:'arcade-style',elment:'element',spped:'speed',
+  realstic:'realistic',realstick:'realistic',
+  behaviour:'behavior',behaviours:'behaviors',
+  doesnt:"doesn't",dont:"don't",cant:"can't",wont:"won't",isnt:"isn't",
+  // UI/feature description typos
+  hsould:'should',shoudl:'should',shold:'should',
+  sleect:'select',slect:'select',seleect:'select',
+  leve:'leave',leav:'leave',
+  epromt:'prompt',promt:'prompt',promot:'prompt',
+  pastesd:'pasted',pastes:'pasted',pasteed:'pasted',
+  quetion:'question',quesiton:'question',qustion:'question',
+  visble:'visible',visbile:'visible',visibel:'visible',
+  messgae:'message',messge:'message',massage:'message',
+  backgorund:'background',backround:'background',
+  clcik:'click',clikc:'click',cilck:'click',
+  codin:'coding',codng:'coding',
+  gdebug:'debug',deubg:'debug',
+  feautre:'feature',featrue:'feature',fetaure:'feature',
+  tpye:'type',tyep:'type',
+  windwo:'window',windwow:'window',
+  reuslt:'result',resutl:'result',
+  dispaly:'display',disaply:'display',
+  acc:'acceleration',icrese:'increase',icrase:'increase',
+  cuz:'because',cus:'because',
+  gonna:'going to',wanna:'want to',gotta:'need to',hafta:'have to',
+  realsitic:'realistic',realitic:'realistic',realsiitc:'realistic',
+  phyiscs:'physics',physiscs:'physics',pyhsics:'physics',physycs:'physics',physcis:'physics',
+  enigne:'engine',enginge:'engine',
+  understeeer:'understeer',undeer:'under',overtseer:'oversteer',
+  tiree:'tire',accleration:'acceleration',accceleration:'acceleration',accelration:'acceleration',
+  presing:'pressing',raicing:'racing',raceing:'racing',amining:'aiming',
+  slidding:'sliding',loosing:'losing',losse:'loose',
+  drifing:'drifting',suspention:'suspension',torqe:'torque',
+  velosity:'velocity',friciton:'friction',frictoin:'friction',
+  collsion:'collision',simualtion:'simulation',
+  becuase:'because',casue:'because',casuse:'because',becasue:'because',becouse:'because',beacuse:'because',
+  recieve:'receive',beleive:'believe',seperate:'separate',occured:'occurred',
+  accomodate:'accommodate',definately:'definitely',definitly:'definitely',
+  untill:'until',existance:'existence',acheive:'achieve',achive:'achieve',
+  agian:'again',althought:'although',altough:'although',
+  begining:'beginning',beutiful:'beautiful',
+  carefuly:'carefully',carefull:'carefully',certian:'certain',
+  enviroment:'environment',experiance:'experience',experince:'experience',
+  familar:'familiar',finaly:'finally',finially:'finally',
+  grammer:'grammar',happend:'happened',
+  immeditaly:'immediately',immediatly:'immediately',independant:'independent',
+  intresting:'interesting',intersting:'interesting',
+  knowlege:'knowledge',langauge:'language',
+  maintainance:'maintenance',neccessary:'necessary',necessery:'necessary',
+  noticable:'noticeable',ofcourse:'of course',peice:'piece',
+  perfer:'prefer',prefered:'preferred',
+  probly:'probably',probaly:'probably',proably:'probably',
+  reccomend:'recommend',recomend:'recommend',
+  rember:'remember',remeber:'remember',
+  sentance:'sentence',similiar:'similar',
+  succesful:'successful',successfull:'successful',
+  suprise:'surprise',suprising:'surprising',
+  tommorow:'tomorrow',tommorrow:'tomorrow',
+  truely:'truly',usally:'usually',usualy:'usually',
+  wierd:'weird',writting:'writing',writeing:'writing',
+  javascipt:'JavaScript',javscript:'JavaScript',pytohn:'Python',pyhton:'Python',
+  databse:'database',fucntion:'function',functoin:'function',funciton:'function',
+  retunr:'return',varialbe:'variable',improt:'import',
+  debuging:'debugging',implmentation:'implementation',algoritm:'algorithm',
+  algorythm:'algorithm',compoennt:'component',componenet:'component',
+  repositry:'repository',documenation:'documentation',dependancy:'dependency',
+  authentcation:'authentication',configuation:'configuration',
+  asyncronous:'asynchronous',paramter:'parameter',interfce:'interface',
+  performace:'performance',optimiation:'optimization',
+};
+
+// ═══════════════════════════════════════════
+//  FUZZY PHRASE NORMALIZER
+// ═══════════════════════════════════════════
+const FUZZY = [
+  [/\bi\s+don'?t?\s+kno+w?\b/gi,"i don't know"],
+  [/\bi\s+dont\s+know\b/gi,"i don't know"],
+  [/\bidont\s*know\b/gi,"i don't know"],
+  [/\bi\s+gue?ss?\b/gi,'i guess'],
+  [/\biguess\b/gi,'i guess'],
+  [/\bright\s+no+w\b/gi,'right now'],
+  [/\bright\s+nwo\b/gi,'right now'],
+  [/\bby\s+th[ea]\s+wa+y\b/gi,'by the way'],
+  [/\bto\s+be\s+hone?st\b/gi,'to be honest'],
+  [/\bin\s+my\s+opi?ni?on\b/gi,'in my opinion'],
+  [/\bas\s+so+n\s+as\s+poss?ible\b/gi,'as soon as possible'],
+  [/\bfor\s+exa?mple\b/gi,'for example'],
+  [/\bas\s+far\s+as\s+i\s+kno+w\b/gi,'as far as i know'],
+];
+
+// ═══════════════════════════════════════════
+//  ABBREVS — long → short (Claude understands all)
+// ═══════════════════════════════════════════
+const ABBREVS = [
+  [/\bi don'?t know\b/gi,'idk'],
+  [/\bi guess\b/gi,'ig'],
+  [/\bright now\b/gi,'rn'],
+  [/\bby the way\b/gi,'btw'],
+  [/\bto be honest\b/gi,'tbh'],
+  [/\bin my opinion\b/gi,'imo'],
+  [/\bin my humble opinion\b/gi,'imho'],
+  [/\bfor your information\b/gi,'fyi'],
+  [/\bas far as i know\b/gi,'afaik'],
+  [/\bas soon as possible\b/gi,'asap'],
+  [/\bshaking my head\b/gi,'smh'],
+  [/\balso known as\b/gi,'aka'],
+  [/\bfor what it'?s worth\b/gi,'fwiw'],
+  [/\bin other words\b/gi,'i.e.'],
+  [/\bthat is to say\b/gi,'i.e.'],
+  [/\bfor example\b/gi,'e.g.'],
+  [/\band so on\b/gi,'etc.'],
+  [/\bnumber (\d)/gi,'#$1'],
+  [/\bversus\b/gi,'vs.'],
+  [/\bapproximately\b/gi,'~'],
+  [/\bmaximum\b/gi,'max'],
+  [/\bminimum\b/gi,'min'],
+  [/\bconfiguration\b/gi,'config'],
+  [/\bdocumentation\b/gi,'docs'],
+  [/\benvironment\b/gi,'env'],
+  [/\brepository\b/gi,'repo'],
+  [/\bauthentication\b/gi,'auth'],
+  [/\bdatabase\b/gi,'db'],
+  [/\bpull request\b/gi,'PR'],
+  [/\buser interface\b/gi,'UI'],
+  [/\buser experience\b/gi,'UX'],
+  [/\bcommand line\b/gi,'CLI'],
+];
+
+// ═══════════════════════════════════════════
+//  FILLERS  (comprehensive — from words/hedges, words/fillers, NLP research)
+// ═══════════════════════════════════════════
+
+// Hedge words from words/hedges (MIT) + extensions — stripped when before verbs/adjectives
+// These reduce certainty without adding meaning to prompts
+const HEDGE_WORDS = [
+  'a bit','a little','about','allegedly','almost','almost never','and all that',
+  'and so forth','apparently','approximately','around','as far as i know','as far as i can tell',
+  'as it were','broadly','by and large','certain','certainly','clearly','conceivably',
+  'could','dubious','essentially','even','fairly','for the most part','frequently',
+  'generally','give or take','hardly','heavily','hopefully','in a sense','in a way',
+  'in general','in most cases','in some ways','in theory','largely','likely',
+  'loosely','mainly','maybe','might','more or less','mostly','nearly','normally',
+  'occasionally','often','on the whole','ostensibly','overall','perhaps','plainly',
+  'plausibly','predominantly','presumable','presumably','pretty','probably','purportedly',
+  'quite','rather','reasonably','reputedly','roughly','seemingly','so to speak',
+  'somehow','sometimes','somewhat','sort of','largely','supposedly','surely',
+  'theoretically','typically','ultimately','under certain circumstances','usually',
+  'virtually','vaguely','widely'
+];
+
+// Filler words from words/fillers (MIT) + extensions
+const FILLER_WORDS = [
+  'uh','um','umm','uhh','hmm','hm','hmm','err','erm',
+  'you know','like','right','okay','so','well','anyway','actually',
+  'basically','literally','honestly','seriously','frankly','clearly',
+  'obviously','certainly','definitely','absolutely','totally','completely',
+  'really','very','just','simply','merely','only','even','still','already',
+  'quite','rather','pretty','fairly','somewhat','kind of','sort of','kinda','sorta',
+  'i mean','i guess','i think','i feel like','i believe','i suppose',
+  'to be honest','to be fair','to tell you the truth','truth be told',
+  'at the end of the day','all things considered','when all is said and done',
+  "for what it's worth",'needless to say','it goes without saying',
+  'as a matter of fact','in actual fact','in reality','as it happens'
+];
+
+const FILLERS = [
+  // Politeness openers (add no info)
+  [/\b(please|pls|plz)\b\s*/gi,''],
+  [/\b(could you|can you|would you|will you|would you be able to)\s+/gi,''],
+  [/\b(i need you to|i want you to|i'd like you to|i was hoping you could)\s+/gi,''],
+  [/\b(i need|i want|i'd like|i would like|i wish)\s+/gi,''],
+  // internet/casual fillers
+  [/\bya know\??\s*/gi,''],
+  [/\bu know\??\s*/gi,''],
+  [/\byou know what i mean\??\s*/gi,''],
+  [/\banyways?\b\s*/gi,''],
+  [/\blol\b[!.]?\s*/gi,''],
+  [/\blmao\b[!.]?\s*/gi,''],
+  [/\bhaha+\b[!.]?\s*/gi,''],
+  [/\bvibey\b/gi,'casual'],
+  // meta-instruction contradictions ("wait no ignore that")
+  [/,?\s*wait\s*,?\s*no\b[^.!?]*/gi,''],
+  [/,?\s*(?:actually\s+)?just\s+(?:like\s+)?ignore that\b[^.!?]*/gi,''],
+  [/,?\s*never mind (?:that\b|it\b)[^.!?]*/gi,''],
+  [/,?\s*forget (?:it|that|what i said)\b[^.!?]*/gi,''],
+  [/,?\s*jk\b[^.!?]*/gi,''],
+  // excessive punctuation cleanup
+  [/[!]{3,}/g,'!'],
+  [/[?]{2,}/g,'?'],
+  [/[!?][?!]+/g,'!'],
+  [/\s{2,}!+/g,' '],
+  [/\b(maybe|perhaps|possibly|conceivably|presumably)\s+/gi,''],
+  [/\b(just|simply|basically|essentially|literally|actually|really|very|quite|rather|even)\s+(?=[a-z])/gi,''],
+  [/\b(kind of|kinda|sort of|sorta|a bit|a little|somewhat|rather)\s+/gi,''],
+  // Discourse fillers
+  [/\b(you know,?|you see,?)\s*/gi,''],
+  [/\b(i mean,?)\s*/gi,''],
+  [/\b(hey,?|hi,?|hello,?|yo,?)\s+/gi,''],
+  [/\b(thanks|thank you|thankyou|thank u|ty|thx|thnx|cheers)\b[.,!]?\s*/gi,''],
+  [/\b(so,?|well,?|okay so|ok so|right so|now,?)\s+(?=\w)/gi,''],
+  [/\b(i think|i feel like|i believe|i suppose|i reckon|i guess)\s+/gi,''],
+  [/\b(make sure to|be sure to|don't forget to)\s+/gi,''],
+  [/\bfeel free to\b\s*/gi,''],
+  [/\bdon't hesitate to\b\s*/gi,''],
+  [/\b(note that|please note|kindly|fyi,?)\b\s*/gi,''],
+  [/\bit would be (great|nice|helpful|awesome|wonderful|fantastic|amazing)\s+(if|to)\s+/gi,''],
+  // "like" as verbal filler — strips when used between words as a pause/hedge
+  // Catches: "add like a camera", "make like a system", "with like jumping"
+  // Does NOT strip: "feel like", "look like", "like mario" (simile), "like that" (reference)
+  [/\blike\s+(?=a\b|an\b|the\b|some\b|any\b)/gi,''],
+  [/(\w),?\s+like,?\s+(\w)/g,'$1 $2'],  // "running, like, jumping" → "running jumping"
+  [/\band like\s+(?=a\b|an\b|the\b|also\b|add\b|make\b)/gi,'and '],
+  [/\bwith like\s+/gi,'with '],
+  [/\bor like\s+(?=a\b|an\b|the\b|add\b|make\b)/gi,'or '],
+  // "doesn't have to restart from the beginning every time they die" → "persist on death"
+  [/\b(?:so )?(?:the )?player(?:s)? (?:doesn't?|don't|wont|won't) have to restart from the beginning every time (?:they |he |she )?(?:dies?|respawns?)\b/gi,'persist on death'],
+  [/\bhave to restart (?:from )?(?:the )?(?:very )?beginning every time\b/gi,'no restart on death'],
+  // Vocal fillers (from words/fillers dataset)
+  [/\bhmm+[,.]?\s*/gi,''],
+  [/\bumm+[,.]?\s*/gi,''],
+  [/\buhh*[,.]?\s*/gi,''],
+  [/\berm+[,.]?\s*/gi,''],
+  [/\berr+[,.]?\s*/gi,''],
+  [/\byeah[,.]?\s*/gi,''],
+  [/\byep[,.]?\s*/gi,''],
+  [/\bnope\b/gi,'no'],
+  [/\bokay[,.]?\s+(?=\w)/gi,''],
+  // Meta filler phrases  
+  [/,?\s*(?:if that makes sense|if this makes sense|if that makes any sense|does that make sense)\b/gi,''],
+  [/,?\s*(?:let me know what you think|let me know what u think|lmk what you think)\b/gi,''],
+  [/,?\s*(?:hope that helps|hope this helps|hope that makes sense)\b/gi,''],
+  [/\band stuff(?:\s+like\s+that)?\b/gi,''],
+  [/\bor something(?:\s+like\s+that)?\b/gi,''],
+  [/\bor whatever\b/gi,''],
+  [/\bor anything like that\b/gi,''],
+  [/\band things like that\b/gi,''],
+  [/\band all that\b/gi,''],
+  [/\band so on and so forth\b/gi,'etc.'],
+  [/\bidk if\b\s*/gi,''],
+  [/\bidk\b\s*/gi,''],
+  [/\bngl\b\s*/gi,''],
+  [/\btbh\b\s*/gi,''],
+  [/\bimo\b\s*/gi,''],
+  [/\bjust saying\b\s*/gi,''],
+  [/\bif that makes sense\b\s*/gi,''],
+  [/\bif you know what i mean\b\s*/gi,''],
+  [/\band (?:also )?make (?:it|them|the code) (?:really |super |very )?good[!.]?\s*$/gi,''],
+  [/\band (?:also )?make (?:sure )?it(?:'s| is) (?:really |super |very )?good[!.]?\s*$/gi,''],
+  [/\bnot sure if\b\s*/gi,''],
+  [/\bjust wondering\b\s*/gi,''],
+  [/\bprobably consider\b/gi,'consider'],
+  [/\bpossibly consider\b/gi,'consider'],
+  [/\bmight want to consider\b/gi,'consider'],
+  [/\band good\b(?=\s*[.,?!]|$)/gi,''],
+  [/\blike\s+(?=a\b|an\b|is\b|it\b|are\b|was\b|does\b|do\b|will\b|the\b)/gi,''],
+  [/\b(i was wondering if (you|u) could|i was wondering if|i was wondering)\s+/gi,''],
+  [/\b(i was thinking maybe|i was thinking|i thought maybe)\s+/gi,''],
+  // conversational hedges in questions
+  [/\bor it (just )?(wants?|needs?) \w+/gi,''],
+  [/,?\s*but it still does it\b/gi,''],
+  [/\b(pls )?help\s*$/gi,''],
+  [/\bi (just |)(want|need|would like) (to |)(know|understand|find out)\b/gi,''],
+  // contraction normalisation (missing apostrophes tokenize badly)
+  [/\bive\b/gi,"i've"],
+  [/\bim\b(?=\s)/gi,"i'm"],
+  [/\bdont\b/gi,"don't"],
+  [/\bcant\b/gi,"can't"],
+  [/\bwont\b/gi,"won't"],
+  [/\bisnt\b/gi,"isn't"],
+  [/\bhasnt\b/gi,"hasn't"],
+  [/\bhavent\b/gi,"haven't"],
+  [/\bwasnt\b/gi,"wasn't"],
+  [/\bwerent\b/gi,"weren't"],
+  [/\bdidnt\b/gi,"didn't"],
+  [/\bcouldnt\b/gi,"couldn't"],
+  [/\bwouldnt\b/gi,"wouldn't"],
+  [/\bshouldnt\b/gi,"shouldn't"],
+  [/\bthats\b/gi,"that's"],
+  [/\bwhats\b/gi,"what's"],
+  [/\bwhos\b/gi,"who's"],
+  [/\bits\b(?=\s+[a-z])/gi,"it's"],
+  [/\blets\b(?=\s)/gi,"let's"],
+  [/\btheyre\b/gi,"they're"],
+  [/\btheyll\b/gi,"they'll"],
+  [/\bwere\b(?=\s+[a-z])/gi,"we're"],
+];
+
+const REDUNDANT = [
+  [/\bin order to\b/gi,'to'],
+  [/\bso as to\b/gi,'to'],
+  [/\bdue to the fact that\b/gi,'because'],
+  [/\bowing to the fact that\b/gi,'because'],
+  [/\bfor the purpose of\b/gi,'to'],
+  [/\bfor the reason that\b/gi,'because'],
+  [/\bat this point in time\b/gi,'now'],
+  [/\bat the present time\b/gi,'now'],
+  [/\bat this moment in time\b/gi,'now'],
+  [/\bin the event that\b/gi,'if'],
+  [/\bin the case that\b/gi,'if'],
+  [/\bprior to\b/gi,'before'],
+  [/\bsubsequent to\b/gi,'after'],
+  [/\bwith regard to\b/gi,'regarding'],
+  [/\bwith respect to\b/gi,'regarding'],
+  [/\bpertaining to\b/gi,'about'],
+  [/\ba (large number|lot|bunch|ton|load|heap) of\b/gi,'many'],
+  [/\ba great deal of\b/gi,'much'],
+  [/\bnot able to\b/gi,'unable to'],
+  [/\bhas the ability to\b/gi,'can'],
+  [/\bis able to\b/gi,'can'],
+  [/\bwas able to\b/gi,'could'],
+  [/\bin terms of\b/gi,'for'],
+  [/\bthe reason is because\b/gi,'because'],
+  [/\bthe fact that\b/gi,'that'],
+  [/\bfirst and foremost\b/gi,'first'],
+  [/\beach and every\b/gi,'every'],
+  [/\bone and only\b/gi,'only'],
+  [/\beach individual\b/gi,'each'],
+  [/\bpast history\b/gi,'history'],
+  [/\bfuture plans\b/gi,'plans'],
+  [/\bfinal outcome\b/gi,'outcome'],
+  [/\btrue fact\b/gi,'fact'],
+  [/\bwould be beneficial\b/gi,'helps'],
+  [/\bwould be helpful\b/gi,'helps'],
+  [/\bwould be useful\b/gi,'helps'],
+  [/\bsound professional(?: and good)?\b/gi,'be professional'],
+  [/\babout (?:the fact )?that we should\b/gi,'about why we should'],
+  [/\bmore productive and happier\b/gi,'more productive'],
+  [/\bproductive and happier\b/gi,'more productive'],
+  [/\bkeeps meowing\b/gi,'meows nonstop'],
+  [/\bkeeps barking\b/gi,'barks nonstop'],
+  [/\bkeeps crying\b/gi,'cries nonstop'],
+  [/\bkeeps whining\b/gi,'whines nonstop'],
+  [/\bevery night\b/gi,'nightly'],
+  [/\bevery day\b/gi,'daily'],
+  [/\bevery week\b/gi,'weekly'],
+  [/\bevery year\b/gi,'annually'],
+  [/\bbefore bed\b/gi,'at bedtime'],
+  [/\bwhat should i do\s*\?*/gi,'what to do?'],
+  [/\bhow do i\b/gi,'how to'],
+  [/\bhow can i\b/gi,'how to'],
+  [/\bhow should i\b/gi,'how to'],
+  [/\bis it possible (?:to|that)\b/gi,'can'],
+  [/\bwould it be possible to\b/gi,'can i'],
+  [/\bfor a period of\b/gi,'for'],
+  [/\bduring the course of\b/gi,'during'],
+  [/\bin spite of the fact that\b/gi,'although'],
+  [/\bregardless of the fact that\b/gi,'although'],
+  [/\bon a daily basis\b/gi,'daily'],
+  [/\bon a regular basis\b/gi,'regularly'],
+  [/\bmade a decision to\b/gi,'decided to'],
+  [/\bcame to the conclusion\b/gi,'concluded'],
+  [/\bis of the opinion that\b/gi,'thinks'],
+  [/\bis in agreement with\b/gi,'agrees with'],
+  [/\bmake an attempt to\b/gi,'try to'],
+  [/\bhas a tendency to\b/gi,'tends to'],
+  [/\bin the near future\b/gi,'soon'],
+  [/\bat some point in time\b/gi,'eventually'],
+  [/\bfrom time to time\b/gi,'sometimes'],
+  [/\btime and time again\b/gi,'repeatedly'],
+  [/\bon a number of occasions\b/gi,'often'],
+  // Filler suffixes
+  [/\btype (?:of )?thing\b/gi,''],
+  [/\btype of deal\b/gi,''],
+  [/\bkind of thing\b/gi,''],
+  [/\bsort of thing\b/gi,''],
+  [/\band (?:also )?make it good[!.]?\s*$/gi,''],
+  [/,?\s*so (?:i|we) can understand it\b/gi,''],
+  [/,?\s*so (?:i|we) can follow (?:along|it)\b/gi,''],
+  [/,?\s*which is (?:really |very |super )?(?:annoying|frustrating|bad)\b/gi,''],
+  [/\band good and realistic\b/gi,'and realistic'],
+  [/\bgood and realistic\b/gi,'realistic'],
+  // Game dev compressions
+  [/\bcamera system that follows the player\b/gi,'follow-cam'],
+  [/\ba camera that follows the player\b/gi,'follow-cam'],
+  [/\bwalks? back and forth\b/gi,'patrols'],
+  [/\bpaces? back and forth\b/gi,'patrols'],
+  [/\bmoves? back and forth\b/gi,'patrols'],
+  [/\bif the player (?:touches?|hits?|collides? with) (?:it|them|the enemy) (?:they|the player) (?:lose|loses|dies?|takes?) a? ?(?:life|hit|damage)\b/gi,'one-hit kill'],
+  [/\bcoins? that the player can collect\b/gi,'collectible coins'],
+  [/\ba score (?:system|counter|tracker)\b/gi,'score'],
+  [/\bcoins? (?:that the player can collect )?and (?:a )?score(?: system)?\b/gi,'coins + score'],
+  [/\bmake (?:sure )?the (?:player )?movement (?:is )?(?:super |really |very )?smooth(?: and (?:not )?(?:no )?jittery)?\b/gi,'smooth movement'],
+  [/\bnot jittery\b/gi,''],
+  [/\bthe jumping should feel (?:like |kinda like |kind of like )?mario(?: ?-?style)?(?: bouncy and fun)?\b/gi,'Mario-style jump feel'],
+  [/\bjumping should feel (?:like |kinda like )?mario\b/gi,'Mario-style jump feel'],
+  [/\bmake (?:sure )?the (?:physics|movement) (?:feel|feels|is) (?:good and )?realistic\b/gi,'realistic physics'],
+  [/\bmake (?:sure )?the code (?:is )?(?:clean|well ?-?written)(?: and commented)?\b/gi,'clean commented code'],
+  [/\bclean and (?:well[ -])?commented(?: code)?\b/gi,'clean commented code'],
+  // General sentence-level meta removals
+  [/\bso (?:that )?(?:it |they |the player )?(?:feels?|looks?|seems?|plays?) (?:really |super |very )?(?:good|great|nice|cool|fun|awesome)\b/gi,''],
+  [/\band (?:also )?make (?:sure )?(?:it(?:'s| is))? (?:really |very |super )?(?:good|great|nice|cool|fun|polished)\b/gi,''],
+  [/\band (?:also )?it should (?:also )?(?:be|feel|look) (?:really |very |super )?(?:good|great|nice|cool)\b/gi,''],
+];
+// ═══════════════════════════════════════════
+//  PROMPT TYPE CONFIG
+// ═══════════════════════════════════════════
+const TYPE_CONFIG = {
+  coding:   { role:'You are a senior software engineer.', format:'', tags:['<language>', '<error_message>', '<code>'] },
+  writing:  { role:'You are a skilled writer.', format:'', tags:[] },
+  explain:  { role:'You are a clear and patient teacher.', format:'', tags:[] },
+  analyze:  { role:'You are a thorough analyst.', format:'Respond with structured sections.', tags:[] },
+  creative: { role:'You are a creative writer.', format:'', tags:[] },
+  email:    { role:'You are an expert business writer.', format:'', tags:[] },
+  summary:  { role:'', format:'', tags:[] },
+  list:     { role:'', format:'Respond as a numbered list.', tags:[] },
+  gamedev:  { role:'You are a senior game developer.', format:'', tags:['<engine>', '<code>', '<error>'] },
+  data:     { role:'', format:'Respond only with valid JSON.', tags:[] },
+};
+
+// ═══════════════════════════════════════════
+//  REPLY LENGTH CONFIG
+// ═══════════════════════════════════════════
+const REPLY_INSTRUCTIONS = {
+  auto:   { instruction: '', estTok: 300 },
+  short:  { instruction: 'Keep your reply concise, under 100 words.', estTok: 100 },
+  medium: { instruction: 'Aim for a medium-length response, around 200–300 words.', estTok: 250 },
+  long:   { instruction: 'Provide a detailed response, around 500+ words.', estTok: 600 },
+  exact1: { instruction: 'Reply in exactly one sentence.', estTok: 25 },
+  bullet: { instruction: 'Reply as bullet points only, no prose.', estTok: 150 },
+};
+
+// ═══════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════
+function estTok(text) {
+  if (!text || !text.trim()) return 0;
+  return Math.max(1, Math.round(text.trim().split(/\s+/).filter(Boolean).length * 1.35));
+}
+function estFileTok(text, filename) {
+  const ext = (filename||'').split('.').pop().toLowerCase();
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  const lines = (text.match(/\n/g)||[]).length;
+  const mult = {html:1.6,json:1.5,ts:1.4,js:1.4,py:1.3,css:1.3,md:1.2,txt:1.3,log:1.3,csv:1.25}[ext]||1.35;
+  return Math.round(words * mult + lines * 0.1);
+}
+
+function spellCorrect(text) {
+  let fixes = 0;
+  const result = text.replace(/\b([a-zA-Z']+)\b/g, match => {
+    const lower = match.toLowerCase();
+    if (SPELL[lower] === undefined) return match;
+    fixes++;
+    const fix = SPELL[lower];
+    if (match[0] === match[0].toUpperCase() && match[0] !== match[0].toLowerCase())
+      return fix.charAt(0).toUpperCase() + fix.slice(1);
+    return fix;
+  });
+  return { text: result.replace(/\s{2,}/g,' ').trim(), fixes };
+}
+
+function fixRepeated(text) {
+  let fixes = 0;
+  const keep2 = new Set(['see','tree','free','fee','book','look','cool','fool','pool','tool','good','wood','food','feel','heel','been','keen','seen','green','all','call','well','bell','cell','miss','kiss','add','odd','egg','inn','too','zoo','need','seed','feed','deer','beer','cheer','steer']);
+  const result = text.replace(/\b([a-zA-Z]*?)([a-zA-Z])\2{2,}([a-zA-Z]*)\b/g, (match, pre, letter, post) => {
+    const double = pre + letter + letter + post;
+    if (keep2.has(double.toLowerCase())) return double;
+    fixes++;
+    return pre + letter + post;
+  });
+  return { text: result, fixes };
+}
+
+// Wikipedia Repetitions list logic — catches doubled words like "the the", "is is", "that that"
+// Excludes legitimate doubles: "had had", "that that" (philosophical), etc.
+function fixDoubledWords(text) {
+  const ALLOW_DOUBLE = new Set(['had','that','very','no','so','if']);
+  let fixes = 0;
+  const result = text.replace(/\b(\w+)\s+\1\b/gi, (match, word) => {
+    if (ALLOW_DOUBLE.has(word.toLowerCase())) return match;
+    fixes++;
+    return word;
+  });
+  return { text: result, fixes };
+}
+
+function deduplicate(text) {
+  const parts = text.split(/([.!?,]+)\s+/).filter((_,i)=>i%2===0).filter(Boolean);
+  const seen = new Set();
+  let removed = 0;
+  const result = parts.filter(s => {
+    const norm = s.toLowerCase().replace(/\s+/g,' ').trim();
+    if (norm.length < 8) return true;
+    if (seen.has(norm)) { removed++; return false; }
+    seen.add(norm); return true;
+  });
+  return { text: result.join(' '), removed };
+}
+
+function removePadding(text) {
+  const pads = [
+    /^(as (an? )?(ai|language model|assistant),?\s*)/i,
+    /^(let me (start|begin|help) (by|you|with))/i,
+    /^(i hope this (helps|answers))/i,
+    /^(great (question|idea)[!.]?)/i,
+    /^(of course[!,.]?\s*)/i,
+    /^(sure[!,.]?\s*here('s| is))/i,
+    /^(certainly[!,.]?\s*)/i,
+    /^(absolutely[!,.]?\s*)/i,
+  ];
+  const sentences = text.split(/([.!?]+)\s+/).filter((_,i)=>i%2===0).filter(Boolean);
+  let removed = 0;
+  const result = sentences.filter(s => {
+    if (pads.some(r => r.test(s.trim()))) { removed++; return false; }
+    return true;
+  });
+  return { text: result.join(' '), removed };
+}
+
+// Flesch Reading Ease — pure math, no library needed
+// Score 60-70 = plain English; <30 = very complex; >80 = very simple
+// Used as a quality signal in the output score panel
+function fleschScore(text) {
+  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0).length || 1;
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length < 3) return null;
+  const syllables = words.reduce((sum, w) => {
+    // Simple syllable counter: count vowel groups
+    const clean = w.toLowerCase().replace(/[^a-z]/g,'');
+    if (!clean) return sum;
+    const count = clean.match(/[aeiouy]+/g)?.length || 1;
+    // Subtract silent e
+    const adj = clean.endsWith('e') && count > 1 ? count - 1 : count;
+    return sum + Math.max(1, adj);
+  }, 0);
+  const score = 206.835
+    - 1.015 * (words.length / sentences)
+    - 84.6  * (syllables / words.length);
+  return Math.round(Math.max(0, Math.min(100, score)));
+}
+
+// ═══════════════════════════════════════════
+//  NLP COMPRESSION — pure regex, no external libs
+// ═══════════════════════════════════════════
+
+// Weak adverbs that add no semantic value to a prompt
+const WEAK_ADVS = [
+  'really','very','quite','truly','literally','basically','honestly','seriously',
+  'actually','simply','just','merely','certainly','definitely','obviously','clearly',
+  'indeed','absolutely','completely','totally','utterly','frankly','naturally',
+  'normally','regularly','typically','generally','usually','essentially',
+  'fundamentally','specifically','particularly','especially','extremely',
+  'incredibly','highly','deeply','strongly','greatly','largely','widely',
+  'somewhat','rather','fairly','pretty'
+];
+
+// Adjectives and adverbs that are semantically empty before nouns/verbs
+const EMPTY_INTENSIFIERS = new Set([
+  'very','really','quite','rather','pretty','fairly','somewhat','extremely',
+  'incredibly','absolutely','totally','completely','utterly','truly','literally'
+]);
+
+function nlpCompress(text) {
+  const before = text;
+  const actions = [];
+
+  // 1. Remove weak adverbs before common adjectives
+  // e.g. "really important" → "important", "very clearly" → "clearly"
+  let advCount = 0;
+  const advPattern = new RegExp('\\b(' + WEAK_ADVS.join('|') + ')\\s+(?=[a-z])', 'gi');
+  const afterAdv = text.replace(advPattern, (match, adv) => {
+    // Only remove if it precedes a word (adv + space + word)
+    advCount++;
+    return '';
+  });
+  if (afterAdv !== text) {
+    text = afterAdv;
+    actions.push('stripped ' + advCount + ' weak adverb(s)');
+  }
+
+  // 2. "the X of the Y" → "Y X" noun compression
+  // e.g. "the behavior of the car" → "car behavior"
+  let nounCount = 0;
+  text = text.replace(/\bthe (\w+) of the (\w+)\b/gi, (m, x, y) => {
+    nounCount++;
+    return y + ' ' + x;
+  });
+  if (nounCount > 0) actions.push('compressed ' + nounCount + ' noun-of-noun phrase(s)');
+
+  // 3. "it should be [verbed]" passive → active imperative
+  // e.g. "it should be added" → "add"
+  text = text.replace(/\b(?:it|this) should be (\w+ed)\b/gi, (m, verb) => {
+    // Convert past tense to imperative: "added"→"add", "shown"→"show"
+    const imp = verb.replace(/(?:ed|d)$/, '').replace(/ied$/, 'y');
+    return imp;
+  });
+
+  // 4. Sentence-opening discourse markers
+  // e.g. "So, basically you need to..." → "You need to..."
+  let discCount = 0;
+  text = text.replace(/^(so|well|ok|okay|look|see|honestly|frankly|actually|basically|essentially)[,.]?\s+/gim, () => {
+    discCount++;
+    return '';
+  });
+  if (discCount > 0) actions.push('removed ' + discCount + ' sentence-opening filler(s)');
+
+  // 4b. Dynamic multi-word hedge pass using HEDGE_WORDS dataset (words/hedges, MIT)
+  // Strips multi-word hedges that appear before adjectives/verbs, e.g. "for the most part useful" → "useful"
+  let hedgeCount = 0;
+  HEDGE_WORDS.forEach(hw => {
+    if (hw.includes(' ') && hw.length > 4) {
+      const esc = hw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      const r = new RegExp('\\b' + esc + '\\s+(?=[a-z])', 'gi');
+      const before2 = text;
+      text = text.replace(r, '');
+      if (text !== before2) hedgeCount++;
+    }
+  });
+  if (hedgeCount > 0) actions.push('stripped ' + hedgeCount + ' multi-word hedge phrase(s)');
+
+  // 4c. Inline replication of write-good (btford, MIT) weasel + wordy detection
+  // Based on write-good's weasel-words and too-wordy checks — no CDN needed
+  const WEASEL_WORDS = [
+    'many','various','very','fairly','several','extremely','exceedingly',
+    'quite','remarkably','few','surprisingly','mostly','largely','hugely',
+    'vast','relatively','completely','literally','absolutely','absolutely',
+    'rather','possibly','presumably','probably','perhaps','sometimes',
+    'generally','usually','typically','often','frequently','occasionally',
+    'somewhat','virtually','almost','nearly','effectively','basically'
+  ];
+  const TOO_WORDY = [
+    ['is able to','can'],['are able to','can'],['was able to','could'],
+    ['were able to','could'],['has the ability to','can'],
+    ['have the ability to','can'],['had the ability to','could'],
+    ['in order to','to'],['in order for','for'],
+    ['due to the fact that','because'],['owing to the fact that','because'],
+    ['on account of the fact that','because'],
+    ['for the purpose of','to'],['for the reason that','because'],
+    ['with the exception of','except'],['in the event that','if'],
+    ['in the case that','if'],['in spite of the fact that','although'],
+    ['regardless of the fact that','although'],
+    ['at the present time','now'],['at this point in time','now'],
+    ['in the near future','soon'],['in the not too distant future','soon'],
+    ['on a daily basis','daily'],['on a regular basis','regularly'],
+    ['on a weekly basis','weekly'],['on an annual basis','annually'],
+    ['a large number of','many'],['a great deal of','much'],
+    ['a wide variety of','various'],['a wide range of','various'],
+    ['came to the conclusion','concluded'],['arrived at the conclusion','concluded'],
+    ['is of the opinion that','thinks'],['holds the view that','believes'],
+    ['made the decision to','decided to'],['made a decision to','decided to'],
+    ['has a tendency to','tends to'],['have a tendency to','tend to'],
+    ['make an attempt to','try to'],['made an attempt to','tried to'],
+    ['it is possible that','possibly'],['there is a possibility','possibly'],
+    ['it is worth noting that','notably'],['it should be noted that','notably'],
+    ['at the end of the day','ultimately'],['when all is said and done','ultimately'],
+    ['first and foremost','first'],['last but not least','finally'],
+    ['needless to say',''],['it goes without saying that',''],
+    ['as previously mentioned',''],['as stated above',''],
+  ];
+  let wordyCount = 0;
+  TOO_WORDY.forEach(([wordy, plain]) => {
+    const esc = wordy.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const r = new RegExp('\\b' + esc + '\\b', 'gi');
+    const bw = text;
+    text = text.replace(r, plain);
+    if (text !== bw) { wordyCount++; }
+  });
+  // Strip weasel words before adjectives only (not standalone)
+  let weaselCount = 0;
+  WEASEL_WORDS.forEach(w => {
+    const esc = w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    // Only remove if followed by another adjective/adverb (not standalone)
+    const r = new RegExp('\\b' + esc + '\\s+(?=(very|quite|rather|extremely|incredibly|absolutely|completely|totally|utterly|really|highly|deeply|strongly|greatly|largely|widely|far|much|far|so|too|more|most|less|least)\\s)', 'gi');
+    const bw = text;
+    text = text.replace(r, '');
+    if (text !== bw) weaselCount++;
+  });
+  if (wordyCount + weaselCount > 0) actions.push('write-good rules: compressed ' + wordyCount + ' wordy phrase(s)' + (weaselCount ? ', ' + weaselCount + ' stacked intensifier(s)' : ''));
+
+  // 5. Semantic duplicate detection — sentences sharing >65% nouns/verbs
+  const splitSentences = t => t.split(/([.!?]+)\s+/).reduce((acc, part, i, arr) => {
+    if (i % 2 === 0) acc.push(part + (arr[i+1] || ''));
+    return acc;
+  }, []).filter(s => s.trim().length > 8);
+
+  const getKeywords = s => {
+    const words = s.toLowerCase().match(/\b[a-z]{3,}\b/g) || [];
+    const stop = new Set(['the','and','for','are','but','not','you','all','can','had','her','was','one','our','out','day','get','has','him','his','how','its','may','now','old','see','two','way','who','any','did','man','new','now','old','see','too','use','way','who','they','this','that','with','have','from','will','your','been','each','that','more','also','into','than','then','them','some','what','when','which','about','other','their','these','would','could','should','over','such','most','well','even','back']);
+    return new Set(words.filter(w => !stop.has(w)));
+  };
+
+  const sentences = splitSentences(text);
+  if (sentences.length > 1) {
+    const keep = [sentences[0]];
+    let dupCount = 0;
+    for (let i = 1; i < sentences.length; i++) {
+      const kw = getKeywords(sentences[i]);
+      const isDup = keep.some(prev => {
+        const pk = getKeywords(prev);
+        if (!kw.size || !pk.size) return false;
+        const overlap = [...kw].filter(w => pk.has(w)).length;
+        return overlap / Math.min(kw.size, pk.size) > 0.65;
+      });
+      if (!isDup) keep.push(sentences[i]);
+      else dupCount++;
+    }
+    if (dupCount > 0) {
+      text = keep.join(' ');
+      actions.push('removed ' + dupCount + ' semantically duplicate sentence(s)');
+    }
+  }
+
+  text = text.replace(/\s{2,}/g, ' ').trim();
+  return { text, saved: Math.max(0, estTok(before) - estTok(text)), actions };
+}
+
+// ═══════════════════════════════════════════
+//  CODESPELL DICTIONARY LOADER
+//  Source: codespell-project/codespell (MIT-compatible, derived from Wikipedia)
+//  4000+ common misspellings → merged into SPELL dict at runtime
+// ═══════════════════════════════════════════
+let _codespellLoaded = false;
+function loadCodespellDict() {
+  if (_codespellLoaded || !isOnline) return;
+  _codespellLoaded = true;
+  fetch('https://raw.githubusercontent.com/codespell-project/codespell/main/codespell_lib/data/dictionary.txt')
+    .then(r => r.text())
+    .then(txt => {
+      let added = 0;
+      txt.split('\n').forEach(line => {
+        const arrow = line.indexOf('->');
+        if (arrow < 0) return;
+        const typo = line.slice(0, arrow).trim().toLowerCase();
+        const fixes = line.slice(arrow + 2).trim();
+        if (!typo || !fixes || typo.includes(' ') || typo.length < 3) return;
+        // Skip ambiguous entries (multiple corrections separated by comma)
+        // Only use unambiguous single-word corrections
+        const parts = fixes.split(',').map(s => s.trim()).filter(Boolean);
+        if (parts.length !== 1) return;
+        const correction = parts[0];
+        if (!correction || correction.includes(' ') || correction.length < 2) return;
+        // Don't overwrite our custom entries
+        if (SPELL[typo] === undefined) {
+          SPELL[typo] = correction;
+          added++;
+        }
+      });
+      console.log('[codespell] loaded ' + added + ' additional spell corrections');
+    })
+    .catch(() => {}); // silent fail if offline/blocked
+}
+
+// ═══════════════════════════════════════════
+//  ONLINE SPELL (Datamuse API — free, no key)
+// ═══════════════════════════════════════════
+function onlineSpellCorrect(text) {
+  const words = text.split(/(\s+)/);
+  const COMMON = new Set(['this','that','with','from','they','them','have','been','were','will','would','could','should','what','when','where','which','their','there','about','some','your','into','more','also','then','than','like','only','over','such','most','very','well','even','back','after','through','before','between','while','these','those','still','every','much','each','here','come','make','take','know','look','time','long','good','great','think','need','want','said','work','part','case','same','last','next','away','many','right','both','down','does','made','never','going','under','might','game','add','button','popup','prompt','feature','window','message','show','hide','click','type','paste','option','select']);
+  let fixes = 0;
+  const promises = words.map(token => {
+    const clean = token.replace(/[^a-zA-Z']/g,'').toLowerCase();
+    if (!clean || clean.length < 4 || COMMON.has(clean) || SPELL[clean] !== undefined)
+      return Promise.resolve(token);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 800);
+    return fetch('https://api.datamuse.com/words?sp=' + encodeURIComponent(clean) + '&max=1', {signal: controller.signal})
+      .then(r => r.json())
+      .then(d => {
+        clearTimeout(timer);
+        if (d.length && d[0].word !== clean && d[0].score > 60000) {
+          fixes++;
+          return (token[0] === token[0].toUpperCase() && token[0] !== token[0].toLowerCase())
+            ? d[0].word[0].toUpperCase() + d[0].word.slice(1) : d[0].word;
+        }
+        return token;
+      })
+      .catch(() => { clearTimeout(timer); return token; });
+  });
+  return Promise.all(promises).then(result => ({ text: result.join(''), fixes }));
+}
+
+// ═══════════════════════════════════════════
+//  MAIN OPTIMIZER
+// ═══════════════════════════════════════════
+async function optimize() {
+  const raw = document.getElementById('promptIn').value.trim();
+  if (!raw) { showErr('Please enter a prompt.'); return; }
+  clearErr();
+
+  const btn = document.getElementById('runBtn');
+  setBtnLoading(5, 'starting…');
+
+  const mode = currentMode;
+  const type = currentType;
+  const replyLen = currentLen;
+  const changes = [];
+  let text = raw;
+  let spellFixes = 0;
+
+  setBtnLoading(15, 'optimizing…');
+  await new Promise(r => setTimeout(r, 0));
+
+  // ── Always-on: dedup + spell + repeated letters ──
+  const { text: dd, removed: ddN } = deduplicate(text);
+  if (ddN > 0) { text = dd; changes.push({tag:'removed', msg:`Removed ${ddN} duplicate sentence(s).`}); }
+
+  const { text: rr, fixes: rrN } = fixRepeated(text);
+  if (rrN > 0) { text = rr; changes.push({tag:'fixed', msg:`Fixed ${rrN} repeated-letter exaggeration(s).`}); }
+
+  const { text: dw, fixes: dwN } = fixDoubledWords(text);
+  if (dwN > 0) { text = dw; changes.push({tag:'fixed', msg:`Removed ${dwN} doubled word(s) (e.g. "the the", "is is").`}); }
+
+  // Offline spell (dict-based)
+  const { text: sp, fixes: spN } = spellCorrect(text);
+  spellFixes = spN;
+  if (spN > 0) {
+    const saved = Math.max(0, estTok(text) - estTok(sp));
+    text = sp;
+    changes.push({tag:'fixed', msg:`Fixed ${spN} spelling issue(s)${saved>0?' — saved ~'+saved+' tokens':''}.`});
+  }
+
+  setBtnLoading(35, 'spell check…');
+  await new Promise(r => setTimeout(r, 0));
+  // Online spell (Datamuse) — only if online, runs after dict
+  if (isOnline) {
+    try {
+      const { text: osp, fixes: ospN } = await onlineSpellCorrect(text);
+      if (ospN > 0) {
+        text = osp; spellFixes += ospN;
+        changes.push({tag:'fixed', msg:`Online spell check fixed ${ospN} additional word(s) using dictionary lookup.`});
+      }
+    } catch(e) {}
+  }
+
+  // ── Save + Balanced: strip fillers & redundancies ──
+  if (mode === 'save' || mode === 'balanced') {
+    const b1 = text;
+    FILLERS.forEach(([r,v]) => { text = text.replace(r, v+' '); });
+    if (text !== b1) changes.push({tag:'removed', msg:'Filler words removed.'});
+    const b2 = text;
+    REDUNDANT.forEach(([r,v]) => { text = text.replace(r, v); });
+    if (text !== b2) changes.push({tag:'removed', msg:'Wordy phrases condensed.'});
+  }
+
+  // ── Save: abbreviations ──
+  if (mode === 'save') {
+    FUZZY.forEach(([r,v]) => { text = text.replace(r, v); });
+    const ba = text;
+    ABBREVS.forEach(([r,v]) => { text = text.replace(r, v); });
+    if (text !== ba) changes.push({tag:'rewritten', msg:'Compressed to short forms (idk, rn, btw, e.g., NFS…).'});
+  }
+
+  // ── Save: structural patterns ──
+  if (mode === 'save') {
+    const beforeStruct = text;
+    const structural = [
+      [/\b(uk|wat|ugh|umm|uhh)\b\s*/gi,''],
+      [/\blet (\w+) be\b/gi,'$1 ='],
+      [/\s*itself like [\w\s]+ (behaviour|behavior|mechanic|feel|style)\b/gi,''],
+      [/,?\s*so on and off\s*(behavi\w+|behavior|mode|mechanic)?/gi,' (toggle)'],
+      [/\bwill actually help\b/gi,'helps'],
+      [/\bactually help\b/gi,'helps'],
+      [/,?\s*so we (keep|maintain|preserve) the [\w\s-]+ (element|aspect|feel|part)/gi,''],
+      [/,?\s*and also add the [\w\s-]+ (element|aspect|feature|feel)/gi,''],
+      [/check how [\w\s]+ work(?:s)? in ([\w\s,./\-]+?) and apply it/gi,'implement like $1'],
+      [/look (?:at |into )?how [\w\s]+ work(?:s)? in ([\w\s,./\-]+?) and (?:apply|use|implement) it/gi,'implement like $1'],
+      [/\bneed for speed\b/gi,'NFS'],
+      [/\bforza horizon ([\d,\s]+)/gi,'Forza H$1'],
+      [/\bgrand theft auto\b/gi,'GTA'],
+      [/\bunreal engine\b/gi,'UE'],
+      [/\band also\b/gi,'and'],
+      [/\band additionally\b/gi,'and'],
+      [/\bas well as\b/gi,'and'],
+      [/\bin addition to\b/gi,'and'],
+      [/\bon top of that,?\b/gi,'also'],
+      [/,?\s*so (?:that )?(?:it |we )?(?:feels?|looks?|seems?) (?:more )?(?:realistic|natural|smooth|good|right|arcade-?like)/gi,''],
+      [/\b(?:you know what i mean|get what i mean)\b/gi,''],
+      [/\bwhat i'?m (?:going|aiming) for is\b/gi,''],
+      [/\bwhat i want is\b/gi,''],
+      [/\bthe idea is (?:that |to )?\b/gi,''],
+      [/\bi was thinking(?: about)?\b/gi,''],
+      [/\bwhen (?:he|she|they|user) clicks? (\w+) in ([\w\s]+) it should\b/gi,'clicking $1 in $2 should'],
+      [/\bby reading (?:his|her|their|the) prompt\b/gi,'from prompt text'],
+      [/\bnot leave it blank\b/gi,''],
+      [/\band during the popup\b/gi,'. In popup:'],
+      [/\bto use this feature\b/gi,''],
+      [/\bmake it easier for them(?: to)?\b/gi,'allow users to'],
+      [/\bfrom there itself\b/gi,'directly'],
+      [/\bso they dont have(?: to)?\b/gi,'without needing to'],
+      [/\bredo the first question again\b/gi,'restart'],
+      [/\btype into the prompt window\b/gi,'type in popup'],
+      [/\bfill the prompt (window|box|field|section)\b/gi,'paste prompt first'],
+      [/\bshould be in (?:the )?background\b/gi,'hidden'],
+      [/\bshould be (shown|visible|displayed)\b/gi,'shows'],
+      [/\bit should say\b/gi,'show:'],
+      [/\ba message (?:saying|that says|on)\b/gi,'message:'],
+      [/\bonly if\b/gi,'if'],
+      [/([,.]){2,}/g,'$1'],
+      [/([!?]){2,}/g,'$1'],
+      [/\bfor example,?\b/gi,'e.g.'],
+      [/\bsuch as\b/gi,'like'],
+      [/\bin order to\b/gi,'to'],
+      [/\bwhat do (?:you|u) (?:think|consider|call) (?:this|it|that)\b/gi,'what is this'],
+    ];
+    structural.forEach(([r,v]) => { text = text.replace(r,v); });
+    text = text.replace(/\s{2,}/g,' ').trim();
+    if (text !== beforeStruct) {
+      const s2 = Math.max(0, estTok(beforeStruct) - estTok(text));
+      changes.push({tag:'removed', msg:`Structural compression: removed circular restatements, meta-commentary, bloat${s2>0?' — ~'+s2+' tokens':''}.`});
+    }
+  }
+
+  setBtnLoading(60, 'NLP pass…');
+  await new Promise(r => setTimeout(r, 0));
+  // ── NLP compression (compromise.js + stopword) — save + balanced ──
+  if (mode === 'save' || mode === 'balanced') {
+    const { text: nlpText, saved: nlpSaved, actions: nlpActions } = nlpCompress(text);
+    if (nlpSaved > 0 || nlpActions.length > 0) {
+      text = nlpText;
+      const detail = nlpActions.length > 0 ? nlpActions.join('; ') : '';
+      changes.push({tag:'removed', msg:`NLP compression${nlpSaved>0?' — saved ~'+nlpSaved+' tokens':''}${detail?' ('+detail+')':''}. Uses compromise.js POS tagging + stopword analysis.`});
+    }
+  }
+
+  setBtnLoading(75, 'cleaning…');
+  await new Promise(r => setTimeout(r, 0));
+  // ── Remove padding sentences — all modes ──
+  const { text: pd, removed: pdN } = removePadding(text);
+  if (pdN > 0) { text = pd; changes.push({tag:'removed', msg:`Removed ${pdN} padding sentence(s).`}); }
+
+  // Clean spacing
+  text = text.replace(/\s{2,}/g,' ').replace(/\s([.,!?])/g,'$1').trim();
+  text = text.charAt(0).toUpperCase() + text.slice(1);
+
+  setBtnLoading(85, 'finalising…');
+  await new Promise(r => setTimeout(r, 0));
+  // ── SAVE MODE STOPS HERE ──
+  if (mode === 'balanced' || mode === 'quality') {
+    const weakRe = [
+      [/^(i was wondering if you (could|can|would) (help me |)(write|create|make|build|explain|analyze|fix|improve|generate))\s+/i, (_,__,___,____,v)=> v.charAt(0).toUpperCase()+v.slice(1)+' '],
+      [/^(help me (write|create|make|build|explain|analyze|fix|improve|generate))\s+/i, (_,__,v)=> v.charAt(0).toUpperCase()+v.slice(1)+' '],
+      [/^(can you (write|create|make|build|explain|analyze|fix|improve|generate))\s+/i, (_,__,v)=> v.charAt(0).toUpperCase()+v.slice(1)+' '],
+      [/^(write me a|create me a|make me a)\s+/i, ()=>'Write a '],
+    ];
+    const bv = text;
+    for (const [r, fn] of weakRe) { const t = text.replace(r, fn); if (t !== text) { text = t; break; } }
+    if (text !== bv) changes.push({tag:'rewritten', msg:'Weak opener → direct action verb.'});
+
+    const lower = text.toLowerCase();
+    const isFactual = /\b(what is|who is|when did|how does|explain|analyze|tell me|find|look up|what are)\b/.test(lower);
+    const hasPermission = /\b(if (you'?re? |you are )unsure|say so|don't guess|if unknown)\b/.test(lower);
+    if (isFactual && !hasPermission) {
+      text = text.trimEnd().replace(/[.!?]?$/, '') + '. If unsure, say so.';
+      changes.push({tag:'added', msg:'Uncertainty permission added.'});
+    }
+
+    const audienceMap = [
+      [/\b(boss|manager|executive|stakeholder|client)\b/, 'Target audience: business decision-maker.'],
+      [/\b(beginner|newcomer|non-technical|layman)\b/,    'Target audience: non-technical beginner.'],
+      [/\b(kid|child|young)\b/,                           'Target audience: young learner.'],
+      [/\b(developer|engineer|technical|programmer)\b/,   'Target audience: technical developer.'],
+    ];
+    if (!/\baudience\b/.test(lower)) {
+      for (const [r, label] of audienceMap) {
+        if (r.test(lower)) { text = text.trimEnd().replace(/[.!?]?$/,'') + `. ${label}`; changes.push({tag:'added', msg:`Audience: "${label}"`}); break; }
+      }
+    }
+  }
+
+  if (mode === 'quality') {
+    const lower = text.toLowerCase();
+    const wantsDepth = /\b(good|great|proper|complete|full|detailed|thorough|comprehensive|professional|perfect)\b/.test(lower);
+    const hasDepth = /\b(include|provide|go beyond|fully|be thorough)\b/.test(lower);
+    if (wantsDepth && !hasDepth) {
+      text = text.trimEnd().replace(/[.!?]?$/,'') + '. Be thorough and go beyond the basics.';
+      changes.push({tag:'added', msg:'Depth instruction added.'});
+    }
+  }
+
+  let prefix = '', typeSuffix = '';
+  if (type && TYPE_CONFIG[type] && mode !== 'save') {
+    const cfg = TYPE_CONFIG[type];
+    if (cfg.role && mode === 'quality') { prefix = cfg.role + '\n\n'; changes.push({tag:'added', msg:`Role: "${cfg.role}"`}); }
+    if (cfg.format && mode === 'quality') { typeSuffix = '\n\n' + cfg.format; changes.push({tag:'added', msg:`Format: "${cfg.format}"`}); }
+  }
+
+  let lenSuffix = '';
+  if (replyLen !== 'auto' && mode !== 'save') {
+    const cfg = REPLY_INSTRUCTIONS[replyLen];
+    lenSuffix = '\n\n' + cfg.instruction;
+    changes.push({tag:'added', msg:`Reply length: "${cfg.instruction}"`});
+  }
+
+  const fileNames = attachedFiles.map(f => f.name);
+  let cotSuffix = '';
+  if (mode === 'quality') {
+    const parts = text.split(/([.!?]+)\s+/).filter((_,i)=>i%2===0).filter(s=>s.trim().length>3);
+    let body = parts.length >= 4
+      ? `<context>\n${parts.slice(0,Math.ceil(parts.length/2)).join(' ').trim()}\n</context>\n\n<instructions>\n${parts.slice(Math.ceil(parts.length/2)).join(' ').trim()}\n</instructions>`
+      : `<instructions>\n${text}\n</instructions>`;
+    if (fileNames.length) body += `\n\n<files>\n${fileNames.map(n=>`  <file>${n}</file>`).join('\n')}\n</files>`;
+    text = body;
+    changes.push({tag:'rewritten', msg:'XML structured (<context>, <instructions>).'});
+
+    const lower2 = text.toLowerCase();
+    if (/\b(debug|fix|calculate|solve|plan|analyze|code|implement)\b/.test(lower2)) {
+      cotSuffix = '\n\nThink step by step inside <thinking> tags, then give your final answer.';
+      changes.push({tag:'added', msg:'Chain-of-thought added.'});
+    }
+  } else if (fileNames.length) {
+    text += '\n\nAttached: ' + fileNames.join(', ');
+  }
+
+  const final = (prefix + text + typeSuffix + lenSuffix + cotSuffix).trim();
+
+  // ── ML pass — runs after regex, catches what rules missed ──
+  if (mlEnabled && mlPipeline) {
+    setBtnLoading(90, 'ML running…');
+    runML(final).then(mlResult => {
+      if (mlResult && estTok(mlResult) < estTok(final)) {
+        const mlChanges = [...changes, {tag:'rewritten', msg:`ML model (DistilBART) further compressed — saved ~${estTok(final)-estTok(mlResult)} more tokens.`}];
+        goto_output(raw, mlResult, mlChanges, spellFixes, replyLen, mode, type);
+      } else {
+        goto_output(raw, final, changes, spellFixes, replyLen, mode, type);
+      }
+      resetBtn('✦ ML Optimize');
+    }).catch(() => {
+      goto_output(raw, final, changes, spellFixes, replyLen, mode, type);
+      resetBtn('✦ ML Optimize');
+    });
+    return; // async path — goto_output called in .then()
+  }
+
+  goto_output(raw, final, changes, spellFixes, replyLen, mode, type);
+  resetBtn(mlEnabled ? '✦ ML Optimize' : '→ Optimize Prompt');
+}
+
+function goto_output(raw, final, changes, spellFixes, replyLen, mode, type) {
+  const origT = estTok(raw), optT = estTok(final);
+  const saved = Math.max(0, origT - optT), addedT = Math.max(0, optT - origT);
+  const replyEst = REPLY_INSTRUCTIONS[replyLen]?.estTok || 300;
+
+  document.getElementById('sOrig').textContent  = origT;
+  document.getElementById('sOpt').textContent   = optT;
+  document.getElementById('sSaved').textContent = saved>0?`-${saved} (${Math.round(saved/origT*100)}%)`:addedT>0?`+${addedT}`:'~same';
+  document.getElementById('sSaved').className   = 'stat-val '+(saved>0?'green':addedT>0?'red':'');
+  document.getElementById('sSpell').textContent = spellFixes;
+  document.getElementById('sReply').textContent = replyLen==='auto'?'~300?':`~${replyEst}`;
+
+  const totalTok = optT + replyEst;
+  document.getElementById('msgValue').innerHTML = `~<b>${totalTok} tokens total</b> (prompt + est. reply). Free plan: ~<b>${((totalTok/10000)*100).toFixed(1)}%</b> of message budget.${totalTok<500?' ✓ Very efficient.':totalTok<1500?' Reasonable.':' ⚠ Consider shorter reply length.'}`;
+
+  window._optimizedResult = final;
+
+  // Diff rendering
+  document.getElementById('compareOrig').textContent = raw;
+  const diffHtml = wordDiff(raw, final);
+  window._optimizedDiff = diffHtml;
+  document.getElementById('compareOpt').innerHTML = diffHtml;
+  document.getElementById('cOrigTok').textContent = origT+' tok';
+  document.getElementById('cOptTok').textContent  = optT+' tok';
+
+  // Reset eye to ON
+  diffViewOn = true;
+  const eyeBtn = document.getElementById('eyeBtn');
+  if (eyeBtn) eyeBtn.style.opacity = '1';
+  const eyeStrike = document.getElementById('eyeStrike');
+  if (eyeStrike) eyeStrike.style.display = 'none';
+  const hint = document.getElementById('cDiffHint');
+  if (hint) hint.style.display = '';
+  const changesWrap = document.getElementById('changesWrap');
+  if (changesWrap) changesWrap.style.display = '';
+
+  // Quality score
+  const {score, details} = scorePrompt(final);
+  const flesch = fleschScore(final);
+  const fleschLabel = flesch === null ? '' : flesch >= 70 ? 'easy to read' : flesch >= 50 ? 'moderate' : 'complex — Claude handles it';
+  const scoreEl = document.getElementById('qualityScore');
+  scoreEl.style.display = 'block';
+  const color = score>=75?'var(--accent)':score>=50?'var(--amber)':'var(--red)';
+  document.getElementById('scoreBarFill').style.cssText = `width:${score}%;background:${color}`;
+  document.getElementById('scoreVal').textContent = score+'/100';
+  document.getElementById('scoreVal').style.color = color;
+  document.getElementById('scoreDetails').innerHTML = details.map(d=>
+    `<span style="color:${d.c==='g'?'var(--accent)':'var(--red)'};margin-right:10px">${d.c==='g'?'✓':'✕'} ${d.t}</span>`
+  ).join('') + (flesch !== null ? `<span style="color:var(--text3);margin-right:10px">· readability: ${flesch}/100 (${fleschLabel})</span>` : '');
+
+  // Chips
+  const chips = [];
+  if (saved>3)       chips.push({c:'g',t:`−${saved} tok saved`});
+  if (addedT>3)      chips.push({c:'r',t:`+${addedT} tok added`});
+  if (spellFixes>0)  chips.push({c:'a',t:`${spellFixes} spelling fixes`});
+  if (mode==='quality') chips.push({c:'p',t:'XML structured'});
+  if (chips.length===0) chips.push({c:'',t:'prompt was already clean'});
+  document.getElementById('chipsRow').innerHTML = chips.map(c=>`<div class="chip ${c.c}">${c.t}</div>`).join('');
+
+  document.getElementById('changesList').innerHTML = '<div class="chg-head">What changed</div>' +
+    (changes.length ? changes : [{tag:'rewritten',msg:'No significant changes needed.'}])
+    .map(c=>`<div class="chg-item"><span class="ctag ${c.tag}">${c.tag}</span><span>${c.msg}</span></div>`).join('');
+
+  // Undo button
+  _lastOriginal = raw;
+  document.getElementById('undoBtn').style.display = 'inline-block';
+
+  // History
+  addToHistory(raw, final);
+
+  document.getElementById('output').classList.add('show');
+  document.getElementById('output').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+
+// ═══════════════════════════════════════════
+//  UI CONTROLS
+// ═══════════════════════════════════════════
+function selectMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-card').forEach(c => {
+    c.classList.remove('selected');
+    if (c.dataset.mode === mode) c.classList.add('selected');
+  });
+}
+
+function setManual() {
+  document.getElementById('togAuto').className = 'gtog inactive';
+  document.getElementById('togManual').className = 'gtog active-manual';
+}
+
+// ═══════════════════════════════════════════
+//  AUTO POPUP LOGIC
+// ═══════════════════════════════════════════
+const POPUP_QS = [
+  {
+    id: 'plan',
+    q: 'Are you on the free plan or a paid plan?',
+    opts: ['Free plan (limited daily messages)', 'Pro plan ($20/mo)', 'API (pay per use)', 'Not sure']
+  },
+  {
+    id: 'priority',
+    q: 'How important is getting the best possible response vs saving tokens?',
+    opts: ['Token saving is top priority', 'A balance of both', 'Best response, tokens don\'t matter']
+  },
+  {
+    id: 'type',
+    q: 'What kind of prompt is this?',
+    opts: ['Simple question / quick task', 'Technical (code, debug, math)', 'Writing / creative', 'Research / analysis', 'Complex multi-step task', 'Game dev', 'Read my prompt and decide'],
+    hasAuto: true  // Q2 can auto-detect from prompt
+  },
+  {
+    id: 'length',
+    q: 'How long should Claude\'s reply be? (how much Claude writes back)',
+    opts: ['Short — one sentence or a few lines (Claude replies briefly)', 'Medium — a paragraph or two (Claude replies normally)', 'Long — detailed explanation (Claude writes a lot)', "Doesn't matter"]
+  }
+];
+
+let popStep = 0;
+let popAnswers = [];
+
+// Detect prompt type from text — scoring based, handles natural language
+function detectPromptType(text) {
+  const t = text.toLowerCase();
+
+  const scores = {
+    technical: 0,
+    writing: 0,
+    research: 0,
+    complex: 0,
+    gamedev: 0,
+  };
+
+  // Technical signals
+  const techWords = ['code','coding','function','debug','debugging','error','bug','bugs','script','program','programming',
+    'fix','implement','implementing','class','variable','variables','syntax','compile','runtime','exception','api',
+    'endpoint','javascript','python','java','typescript','css','html','sql','bash','json','react','node','library',
+    'framework','component','method','loop','array','object','database','server','backend','frontend','deploy',
+    'git','terminal','console','output','input','return','import','export','install','package','test','unittest',
+    // general dev actions
+    'build','create','make','develop','integrate','setup','configure','optimize','refactor','upgrade',
+    'add','implement','applying','feature','behaviour','behavior','mechanic','mechanics'];
+  techWords.forEach(w => { if (t.includes(w)) scores.technical += 2; });
+
+  // Game dev signals (separate from generic tech)
+  const gameWords = ['game','physics','engine','shader','render','collision','velocity','vector','matrix','algorithm',
+    'unity','unreal','godot','pygame','rigidbody','collider','mesh','sprite','animation','camera','player',
+    'handbrake','drift','drifting','oversteer','understeer','tire','tyre','torque','friction','suspension',
+    'acceleration','steering','throttle','braking','wheel','vehicle','car','racing','simulation','force',
+    'gravity','raycast','hitbox','spawn','instantiate','prefab','scene','update','fixedupdate','deltatime',
+    'nfs','forza','need for speed','horizon','arcade','realistic','realsitic','phyiscs','physics engine',
+    'game dev','gamedev','driving','handling','slip angle','rear wheel','front wheel'];
+  gameWords.forEach(w => { if (t.includes(w)) scores.gamedev += 2; });
+
+  // Writing signals
+  const writeWords = ['write','writing','essay','blog','article','story','poem','creative','narrative','draft',
+    'rewrite','edit','proofread','paragraph','letter','email','message','caption','copy','ad','advertisement',
+    'marketing','slogan','headline','script','speech','cover letter','resume','cv','bio','description',
+    'post','tweet','content','tone','style','formal','informal','professional','casual','persuasive'];
+  writeWords.forEach(w => { if (t.includes(w)) scores.writing += 2; });
+
+  // Research/analysis signals
+  const researchWords = ['analyze','analyse','analysis','research','compare','comparison','summarize','summarise',
+    'summary','explain','study','review','evaluate','assess','report','findings','data','statistics','trend',
+    'insight','difference','between','pros','cons','advantages','disadvantages','what is','how does','why does',
+    'history','overview','breakdown','opinion','thoughts','understand','meaning','define','definition'];
+  researchWords.forEach(w => { if (t.includes(w)) scores.research += 2; });
+
+  // Complex/multi-step signals
+  const complexWords = ['plan','planning','design','architect','strategy','workflow','pipeline','system','project',
+    'roadmap','build','develop','create','integrate','multiple','steps','phases','end to end','full','complete',
+    'entire','whole','everything','setup','configure','migrate','optimize','scale','architecture','structure'];
+  complexWords.forEach(w => { if (t.includes(w)) scores.complex += 2; });
+
+  // Sentence length signal
+  const wordCount = t.split(/\s+/).length;
+  if (wordCount > 60) scores.complex += 3;
+  if (wordCount > 30) scores.complex += 1;
+
+  // Find the winner
+  const best = Object.entries(scores).sort((a,b) => b[1]-a[1])[0];
+
+  // Only use detection if there's a meaningful signal, else default to simple
+  if (best[1] <= 2) return 0; // simple
+
+  const map = { technical:1, writing:2, research:3, complex:4, gamedev:6 };
+  return map[best[0]] ?? 0;
+}
+
+function openAutoPopup() {
+  document.getElementById('togAuto').className = 'gtog active-auto';
+  document.getElementById('togManual').className = 'gtog inactive';
+  popStep = 0;
+  popAnswers = Array(POPUP_QS.length).fill(null);
+  document.getElementById('popNext').textContent = 'Next →';
+  document.getElementById('popNext').onclick = () => popNav(1);
+  document.getElementById('autoPopup').classList.add('show');
+  document.getElementById('popResult').classList.remove('show');
+
+  const hasPrompt = document.getElementById('promptIn').value.trim().length > 0;
+  if (!hasPrompt) {
+    showNoPromptScreen();
+  } else {
+    renderPopQ();
+  }
+}
+
+function showNoPromptScreen() {
+  document.getElementById('popProgress').innerHTML =
+    POPUP_QS.map(() => `<div class="pp-dot"></div>`).join('');
+
+  document.getElementById('popQuestions').innerHTML = `
+    <div style="text-align:center;padding:8px 0 4px">
+      <div style="font-size:28px;margin-bottom:10px">✏</div>
+      <div style="font-size:13px;color:var(--text);margin-bottom:6px">Paste your prompt first</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:16px;line-height:1.7">
+        Type or paste your prompt below — the questions will<br>appear and I'll read it to help pick the best mode.
+      </div>
+      <textarea id="popPromptInput" placeholder="Paste your prompt here..." style="width:100%;min-height:90px;background:var(--bg3);border:.5px solid var(--border2);border-radius:var(--r);padding:10px 12px;font-family:'DM Mono',monospace;font-size:12px;color:var(--text);outline:none;resize:none;line-height:1.6" oninput="onPopPromptInput()"></textarea>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;text-align:right" id="popPromptTok">tokens: 0</div>
+    </div>`;
+
+  const nextBtn = document.getElementById('popNext');
+  nextBtn.textContent = 'Continue →';
+  nextBtn.disabled = true;
+  nextBtn.onclick = () => {
+    // copy popup prompt into main textarea and proceed
+    const val = document.getElementById('popPromptInput').value.trim();
+    if (!val) return;
+    document.getElementById('promptIn').value = val;
+    liveTokens();
+    popStep = 0;
+    popAnswers = Array(POPUP_QS.length).fill(null);
+    document.getElementById('popNext').textContent = 'Next →';
+    document.getElementById('popNext').onclick = () => popNav(1);
+    renderPopQ();
+  };
+  document.getElementById('popBack').disabled = true;
+  document.getElementById('popResult').classList.remove('show');
+}
+
+function onPopPromptInput() {
+  const val = document.getElementById('popPromptInput')?.value || '';
+  const tok = estTok(val);
+  const tokEl = document.getElementById('popPromptTok');
+  if (tokEl) tokEl.textContent = `tokens: ${tok}`;
+  document.getElementById('popNext').disabled = val.trim().length === 0;
+}
+
+function closePopup() {
+  document.getElementById('autoPopup').classList.remove('show');
+  setManual();
+}
+
+function renderPopQ() {
+  const q = POPUP_QS[popStep];
+  document.getElementById('popProgress').innerHTML =
+    POPUP_QS.map((_,i) => `<div class="pp-dot${i <= popStep ? ' done' : ''}"></div>`).join('');
+
+  const isLast = popStep === POPUP_QS.length - 1;
+
+  // For Q2 (type): if "Read my prompt" was pre-auto-detected, show that
+  let autoDetectedNote = '';
+  if (q.hasAuto && popAnswers[popStep] !== null && popAnswers[popStep] !== 5) {
+    autoDetectedNote = `<div style="font-size:10px;color:var(--accent);margin-bottom:8px">✓ Auto-detected from your prompt — change if needed</div>`;
+  }
+
+  document.getElementById('popQuestions').innerHTML = `
+    <div class="q-block">
+      <div class="q-text">${q.q}</div>
+      ${autoDetectedNote}
+      <div class="q-opts">
+        ${q.opts.map((o,i) => `<button class="q-opt${popAnswers[popStep]===i?' picked':''}" onclick="pickOpt(${i})">${o}</button>`).join('')}
+      </div>
+    </div>`;
+
+  // Auto-detect type when arriving at Q2
+  if (q.hasAuto && popAnswers[popStep] === null) {
+    const promptText = document.getElementById('promptIn').value.trim();
+    if (promptText) {
+      const detected = detectPromptType(promptText);
+      popAnswers[popStep] = detected;
+      // re-render to show selection
+      renderPopQ(); return;
+    }
+  }
+
+  document.getElementById('popBack').disabled = popStep === 0;
+  const nextBtn = document.getElementById('popNext');
+  nextBtn.textContent = isLast ? 'See recommendation →' : 'Next →';
+  nextBtn.disabled = popAnswers[popStep] === null;
+  nextBtn.onclick = () => popNav(1);
+  document.getElementById('popResult').classList.remove('show');
+}
+
+function pickOpt(i) {
+  // If Q2 (type) and user picks "Read my prompt and decide" (last option, index 6)
+  if (POPUP_QS[popStep].hasAuto && i === POPUP_QS[popStep].opts.length - 1) {
+    const promptText = document.getElementById('promptIn').value.trim();
+    if (promptText) {
+      const detected = detectPromptType(promptText);
+      popAnswers[popStep] = detected;
+      renderPopQ(); return;
+    }
+  }
+  popAnswers[popStep] = i;
+  document.querySelectorAll('.q-opt').forEach((b,idx) => {
+    b.classList.toggle('picked', idx === i);
+  });
+  document.getElementById('popNext').disabled = false;
+}
+
+function popNav(dir) {
+  if (dir === 1 && popAnswers[popStep] === null) return;
+  if (dir === 1 && popStep === POPUP_QS.length - 1) {
+    showPopResult(); return;
+  }
+  popStep = Math.max(0, Math.min(POPUP_QS.length - 1, popStep + dir));
+  renderPopQ();
+}
+
+function showPopResult() {
+  const [plan, priority, type, length] = popAnswers;
+  let mode = 'save';
+  let reason = '';
+
+  if (plan === 0 && priority === 0) {
+    mode = 'save';
+    reason = "You're on the free plan and want to save tokens — <b>Save tokens</b> mode strips everything down to get the most out of each message.";
+  } else if (plan === 0 && priority === 1) {
+    mode = 'balanced';
+    reason = "You're on the free plan but want decent quality too — <b>Balanced</b> mode saves tokens on fluff while adding a few smart improvements.";
+  } else if (plan === 0 && (type === 1 || type === 4 || type === 5 || type === 6)) {
+    mode = 'balanced';
+    reason = "Technical or complex tasks on the free plan benefit from <b>Balanced</b> mode — some structure helps Claude get it right the first time, saving you follow-up messages.";
+  } else if (priority === 2 || plan === 2) {
+    mode = 'quality';
+    reason = "You want the best possible response — <b>Max quality</b> mode applies all Anthropic's official techniques. Worth the extra tokens.";
+  } else if (type === 1 || type === 4 || type === 5 || type === 6) {
+    mode = 'quality';
+    reason = "Technical or complex tasks benefit most from <b>Max quality</b> mode — XML structure and chain-of-thought reasoning significantly improve accuracy.";
+  } else if (priority === 1 || plan === 1) {
+    mode = 'balanced';
+    reason = "<b>Balanced</b> mode is the sweet spot for your situation — saves wasted tokens while applying the key Anthropic techniques that matter most.";
+  } else {
+    mode = 'save';
+    reason = "For simple, short tasks on the free plan, <b>Save tokens</b> mode keeps things lean and efficient.";
+  }
+
+  const lenMap = ['short','medium','long','auto'];
+  const newLen = lenMap[length] || 'auto';
+  currentLen = newLen;
+  document.querySelectorAll('.rlen').forEach(b => {
+    b.classList.toggle('on', b.dataset.len === newLen);
+  });
+
+  selectMode(mode);
+
+  // Sync the prompt type buttons in the main UI
+  // popup type index: 0=simple, 1=technical, 2=writing, 3=research, 4=complex, 5=auto, 6=gamedev
+  const typeDataMap = ['list', 'coding', 'writing', 'analyze', 'coding', null, 'gamedev'];
+  const detectedDataVal = typeDataMap[type] !== undefined ? typeDataMap[type] : null;
+  document.querySelectorAll('.ptype').forEach(b => b.classList.remove('on'));
+  if (detectedDataVal) {
+    const btn = document.querySelector(`.ptype[data-type="${detectedDataVal}"]`);
+    if (btn) { btn.classList.add('on'); currentType = detectedDataVal; }
+  } else {
+    currentType = null;
+  }
+
+  const typeLabels = ['simple question','technical / code','writing / creative','research / analysis','complex task','auto-detected','game dev'];
+  const modeLabels = {save:'⚡ Save tokens', balanced:'⚖ Balanced', quality:'✦ Max quality'};
+  document.getElementById('popResult').innerHTML =
+    `Recommended: <b>${modeLabels[mode]}</b><br>${reason}<br><br>Prompt type detected: <b>${typeLabels[type] || 'general'}</b> · Reply length: <b>${newLen}</b>`;
+  document.getElementById('popResult').classList.add('show');
+  document.getElementById('popNext').textContent = 'Apply & close';
+  document.getElementById('popNext').onclick = () => closePopup();
+}
+
+document.querySelectorAll('.ptype').forEach(b => b.addEventListener('click', () => {
+  const wasOn = b.classList.contains('on');
+  document.querySelectorAll('.ptype').forEach(x => x.classList.remove('on'));
+  if (!wasOn) { b.classList.add('on'); currentType = b.dataset.type; }
+  else currentType = null;
+}));
+
+document.querySelectorAll('.rlen').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.rlen').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  currentLen = b.dataset.len;
+}));
+
+function liveTokens() {
+  const v = document.getElementById('promptIn').value;
+  const t = estTok(v), w = v.trim() ? v.trim().split(/\s+/).length : 0, c = v.length;
+  document.getElementById('tokLive').innerHTML = `tokens: <span>${t}</span> · words: <span>${w}</span> · chars: <span>${c}</span>`;
+}
+
+// ═══════════════════════════════════════════
+//  FILE HANDLING
+// ═══════════════════════════════════════════
+const attachedFiles = [];
+const fileMeta = {};
+
+function addFiles(list) {
+  Array.from(list).forEach(f => {
+    if (!attachedFiles.find(x => x.name === f.name)) { attachedFiles.push(f); readFile(f); }
+  });
+}
+function readFile(f) {
+  if (f.type.startsWith('image/')) { fileMeta[f.name]={tok:Math.round(f.size/150)}; renderFiles(); return; }
+  const r = new FileReader();
+  r.onload = e => { fileMeta[f.name]={tok:estFileTok(e.target.result||'',f.name)}; renderFiles(); };
+  r.onerror = () => { fileMeta[f.name]={tok:0}; renderFiles(); };
+  r.readAsText(f);
+}
+function renderFiles() {
+  let total = 0;
+  document.getElementById('fileList').innerHTML = attachedFiles.map((f,i) => {
+    const tok = fileMeta[f.name]?.tok ?? '…';
+    if (typeof tok==='number') total += tok;
+    return `<div class="file-row"><span class="file-name">${f.name}</span><span class="file-toks">~<b>${typeof tok==='number'?tok.toLocaleString():tok}</b> tok</span><button class="file-del" onclick="removeFile(${i})">×</button></div>`;
+  }).join('');
+  const fr = document.getElementById('fileTotalRow');
+  if (attachedFiles.length > 0) { fr.style.display='block'; document.getElementById('fileTokTotal').textContent=total.toLocaleString(); }
+  else fr.style.display='none';
+}
+function removeFile(i) { const n=attachedFiles[i].name; attachedFiles.splice(i,1); delete fileMeta[n]; renderFiles(); }
+function doDragOver(e) { e.preventDefault(); document.getElementById('dropZone').classList.add('drag'); }
+function doDragLeave() { document.getElementById('dropZone').classList.remove('drag'); }
+function doDrop(e) { e.preventDefault(); doDragLeave(); addFiles(e.dataTransfer.files); }
+
+function showErr(m) { const e=document.getElementById('err'); e.textContent=m; e.classList.add('show'); }
+function clearErr() { document.getElementById('err').classList.remove('show'); }
+
+let diffViewOn = true;
+
+function toggleDiffView() {
+  diffViewOn = !diffViewOn;
+  const btn = document.getElementById('eyeBtn');
+  const hint = document.getElementById('cDiffHint');
+  const changesWrap = document.getElementById('changesWrap');
+  const qualityScore = document.getElementById('qualityScore');
+  const optEl = document.getElementById('compareOpt');
+
+  if (diffViewOn) {
+    // Show diff + changes
+    btn.style.opacity = '1';
+    const strike = document.getElementById('eyeStrike');
+    if (strike) strike.style.display = 'none';
+    if (hint) hint.style.display = '';
+    if (changesWrap) changesWrap.style.display = '';
+    if (qualityScore && qualityScore._wasVisible) qualityScore.style.display = 'block';
+    // Restore diff HTML
+    if (window._optimizedDiff) optEl.innerHTML = window._optimizedDiff;
+  } else {
+    // Hide diff highlights + changes list — show plain text only
+    btn.style.opacity = '0.5';
+    const strike = document.getElementById('eyeStrike');
+    if (strike) strike.style.display = 'block';
+    if (hint) hint.style.display = 'none';
+    if (changesWrap) changesWrap.style.display = 'none';
+    qualityScore._wasVisible = qualityScore.style.display !== 'none';
+    if (qualityScore) qualityScore.style.display = 'none';
+    // Replace diff HTML with plain clean text
+    if (optEl) optEl.textContent = window._optimizedResult || '';
+  }
+}
+
+function setBtnLoading(pct, label) {
+  requestAnimationFrame(() => {
+    const btn = document.getElementById('runBtn');
+    const textEmpty = document.getElementById('runBtnText');
+    const textFilled = document.getElementById('runBtnTextFilled');
+    const fill = document.getElementById('runBtnInnerFill');
+    const msg = (label || 'optimizing') + '   ' + pct + '%';
+    if (btn) { btn.classList.add('loading'); btn.disabled = true; }
+    if (textEmpty) textEmpty.textContent = msg;
+    if (textFilled) {
+      textFilled.textContent = msg;
+      textFilled.style.clipPath = 'inset(0 ' + (100 - pct) + '% 0 0)';
+    }
+    if (fill) fill.style.width = pct + '%';
+  });
+}
+
+function resetBtn(label) {
+  requestAnimationFrame(() => {
+    const textEmpty = document.getElementById('runBtnText');
+    const textFilled = document.getElementById('runBtnTextFilled');
+    const fill = document.getElementById('runBtnInnerFill');
+    const msg = '100%';
+    if (textEmpty) textEmpty.textContent = msg;
+    if (textFilled) { textFilled.textContent = msg; textFilled.style.clipPath = 'inset(0 0% 0 0)'; }
+    if (fill) fill.style.width = '100%';
+    setTimeout(() => {
+      const btn = document.getElementById('runBtn');
+      const finalLabel = label || '→ Optimize Prompt';
+      if (btn) { btn.classList.remove('loading'); btn.disabled = false; }
+      if (textEmpty) textEmpty.textContent = finalLabel;
+      if (textFilled) { textFilled.textContent = finalLabel; textFilled.style.clipPath = 'inset(0 100% 0 0)'; }
+      if (fill) fill.style.width = '0%';
+    }, 500);
+  });
+}
+
+function copyResult() {
+  const text = window._optimizedResult || '';
+  if (!text) return;
+  const btn = document.getElementById('copyBtn');
+  const done = () => {
+    btn.textContent = 'Copied ✓';
+    btn.style.background = 'var(--accent)';
+    btn.style.color = '#0e0e0f';
+    setTimeout(() => { btn.textContent = 'Copy optimized'; btn.style.background = ''; btn.style.color = ''; }, 2000);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+function fallbackCopy(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  try { document.execCommand('copy'); done(); } catch(e) {}
+  document.body.removeChild(ta);
+}
+function downloadResult() {
+  const text = window._optimizedResult || '';
+  if (!text) return;
+  const blob = new Blob([text], {type:'text/plain;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'optimized-prompt.txt';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+}
+function clearAll() {
+  document.getElementById('promptIn').value='';
+  document.getElementById('output').classList.remove('show');
+  document.getElementById('qualityScore').style.display='none';
+  document.getElementById('undoBtn').style.display='none';
+  document.getElementById('preScanBadge').innerHTML='';
+  window._optimizedResult='';
+  liveTokens(); clearErr();
+}
+
+// ═══════════════════════════════════════════
+//  WORD-LEVEL DIFF
+// ═══════════════════════════════════════════
+function wordDiff(orig, optimized) {
+  const ow = orig.split(/(\s+)/);
+  const nw = optimized.split(/(\s+)/);
+  // Simple LCS-based diff
+  const m = ow.length, n = nw.length;
+  const dp = Array.from({length:m+1},()=>new Array(n+1).fill(0));
+  for (let i=m-1;i>=0;i--) for (let j=n-1;j>=0;j--)
+    dp[i][j] = ow[i]===nw[j] ? dp[i+1][j+1]+1 : Math.max(dp[i+1][j],dp[i][j+1]);
+  let i=0,j=0; const parts=[];
+  while(i<m||j<n){
+    if(i<m&&j<n&&ow[i]===nw[j]){parts.push({t:'same',v:ow[i]});i++;j++;}
+    else if(j<n&&(i>=m||dp[i][j+1]>=dp[i+1][j])){parts.push({t:'add',v:nw[j]});j++;}
+    else{parts.push({t:'rem',v:ow[i]});i++;}
+  }
+  return parts.map(p=>
+    p.t==='same'?escHtml(p.v):
+    p.t==='add'?`<span class="diff-add">${escHtml(p.v)}</span>`:
+    `<span class="diff-rem">${escHtml(p.v)}</span>`
+  ).join('');
+}
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ═══════════════════════════════════════════
+//  PRE-SCAN
+// ═══════════════════════════════════════════
+function preScan() {
+  const text = document.getElementById('promptIn').value;
+  if (!text.trim()) { document.getElementById('preScanBadge').innerHTML=''; return; }
+  const issues = [];
+  // spell issues (quick check against dict)
+  const words = text.split(/\s+/);
+  let typos = 0;
+  words.forEach(w => { const l=w.replace(/[^a-zA-Z]/g,'').toLowerCase(); if(SPELL[l]!==undefined&&SPELL[l]!==l) typos++; });
+  if (typos > 0) issues.push(`${typos} typo${typos>1?'s':''}`);
+  // duplicates
+  const sents = text.split(/[.!?]+/).map(s=>s.trim().toLowerCase()).filter(s=>s.length>10);
+  const seen = new Set(); let dups=0;
+  sents.forEach(s=>{ if(seen.has(s)) dups++; else seen.add(s); });
+  if (dups > 0) issues.push(`${dups} duplicate${dups>1?'s':''}`);
+  // repeated punctuation
+  if (/([,.]){2,}/.test(text)) issues.push('repeated punctuation');
+  // filler words
+  const fillerCount = (text.match(/\b(please|basically|actually|just|very|really|kind of|sort of)\b/gi)||[]).length;
+  if (fillerCount > 2) issues.push(`${fillerCount} filler words`);
+  // too long
+  const toks = estTok(text);
+  if (toks > 300) issues.push(`${toks} tokens — consider compressing`);
+
+  const badge = document.getElementById('preScanBadge');
+  if (issues.length === 0) {
+    badge.innerHTML = `<span class="scan-badge scan-ok">✓ looks clean</span>`;
+  } else if (issues.length <= 2) {
+    badge.innerHTML = `<span class="scan-badge scan-warn">⚠ ${issues.join(' · ')}</span>`;
+  } else {
+    badge.innerHTML = `<span class="scan-badge scan-bad">✕ ${issues.join(' · ')}</span>`;
+  }
+}
+
+// ═══════════════════════════════════════════
+//  PROMPT QUALITY SCORE
+// ═══════════════════════════════════════════
+function scorePrompt(text) {
+  const t = text.toLowerCase();
+  let score = 50; // baseline
+  const details = [];
+
+  // Clarity — has a clear verb action
+  if (/^(write|create|build|fix|debug|explain|analyze|summarize|generate|implement|design|list|compare|translate|review)/i.test(text.trim())) {
+    score += 15; details.push({c:'g', t:'starts with action verb (+15)'});
+  } else {
+    score -= 10; details.push({c:'r', t:'no clear action verb (-10)'});
+  }
+  // Specificity — has specific details
+  const specifics = (text.match(/\b(in|for|using|with|about|that|which|where|when|because)\b/gi)||[]).length;
+  if (specifics >= 3) { score += 10; details.push({c:'g', t:'specific context (+10)'}); }
+  // Length — not too short, not too long
+  const wc = text.split(/\s+/).length;
+  if (wc < 5) { score -= 20; details.push({c:'r', t:'too short (-20)'}); }
+  else if (wc > 150) { score -= 10; details.push({c:'r', t:'very long, may confuse Claude (-10)'}); }
+  else if (wc >= 10 && wc <= 80) { score += 10; details.push({c:'g', t:'good length (+10)'}); }
+  // Fillers
+  const fillers = (text.match(/\b(please|basically|actually|just|very|really|um|uh|so,)\b/gi)||[]).length;
+  if (fillers > 3) { score -= 10; details.push({c:'r', t:`${fillers} filler words (-10)`}); }
+  // Typos
+  const typos = text.split(/\s+/).filter(w=>{const l=w.replace(/[^a-zA-Z]/g,'').toLowerCase();return SPELL[l]!==undefined&&SPELL[l]!==l;}).length;
+  if (typos > 2) { score -= 15; details.push({c:'r', t:`${typos} spelling issues (-15)`}); }
+  else if (typos === 0) { score += 5; details.push({c:'g', t:'no spelling issues (+5)'}); }
+  // Has output format hint
+  if (/\b(list|bullet|table|json|paragraph|summary|one sentence|markdown|numbered)\b/i.test(text)) {
+    score += 10; details.push({c:'g', t:'output format specified (+10)'});
+  }
+
+  score = Math.max(0, Math.min(100, score));
+  return { score, details };
+}
+
+// ═══════════════════════════════════════════
+//  HISTORY
+// ═══════════════════════════════════════════
+const promptHistory = [];
+
+function addToHistory(original, optimized) {
+  promptHistory.unshift({ original, optimized, time: new Date().toLocaleTimeString() });
+  if (promptHistory.length > 8) promptHistory.pop();
+  renderHistory();
+}
+
+function renderHistory() {
+  if (promptHistory.length === 0) return;
+  const row = document.getElementById('historyRow');
+  row.style.display = 'block';
+  document.getElementById('historyList').innerHTML = promptHistory.map((h,i) =>
+    `<div class="hist-item" onclick="loadHistory(${i})">
+      <span class="hist-text">${escHtml(h.original.slice(0,60))}${h.original.length>60?'…':''}</span>
+      <span class="hist-tok">${estTok(h.original)}→${estTok(h.optimized)} tok · ${h.time}</span>
+    </div>`
+  ).join('');
+}
+
+function loadHistory(i) {
+  const h = promptHistory[i];
+  document.getElementById('promptIn').value = h.original;
+  liveTokens(); preScan();
+}
+
+// ═══════════════════════════════════════════
+//  TEMPLATES
+// ═══════════════════════════════════════════
+const TEMPLATES = [
+  { label:'debug code', text:'Debug this code and explain what\'s wrong:\n\n[paste code here]' },
+  { label:'explain concept', text:'Explain [concept] clearly. Use a simple analogy. Target audience: beginner.' },
+  { label:'write email', text:'Write a professional email to [recipient] about [topic]. Tone: [formal/casual].' },
+  { label:'review code', text:'Review this code for bugs, performance issues, and improvements:\n\n[paste code here]' },
+  { label:'summarize', text:'Summarize the following in 3 bullet points:\n\n[paste text here]' },
+  { label:'compare options', text:'Compare [option A] vs [option B]. Focus on: [criteria]. Format as a table.' },
+  { label:'game dev', text:'Implement [feature] in [engine/language]. Reference: [game/example]. Keep it realistic.' },
+  { label:'data analysis', text:'Analyze this data and identify the top 3 trends:\n\n[paste data here]' },
+  { label:'write tests', text:'Write unit tests for this function. Cover edge cases:\n\n[paste code here]' },
+  { label:'fix prompt', text:'Rewrite this prompt to be clearer and more effective for an AI:\n\n[paste prompt here]' },
+];
+
+let templatesOpen = false;
+function toggleTemplates() {
+  templatesOpen = !templatesOpen;
+  const d = document.getElementById('templatesDrawer');
+  if (templatesOpen && !document.getElementById('templateBtns').innerHTML) {
+    document.getElementById('templateBtns').innerHTML = TEMPLATES.map((t,i) =>
+      `<button class="opt" onclick="useTemplate(${i})">${t.label}</button>`
+    ).join('');
+  }
+  d.style.display = templatesOpen ? 'block' : 'none';
+}
+
+function useTemplate(i) {
+  document.getElementById('promptIn').value = TEMPLATES[i].text;
+  liveTokens(); preScan();
+  toggleTemplates();
+}
+
+// ═══════════════════════════════════════════
+//  UNDO / RESTORE
+// ═══════════════════════════════════════════
+let _lastOriginal = null;
+
+function undoOptimize() {
+  if (_lastOriginal) {
+    document.getElementById('promptIn').value = _lastOriginal;
+    document.getElementById('output').classList.remove('show');
+    document.getElementById('undoBtn').style.display = 'none';
+    liveTokens(); preScan();
+  }
+}
+
+// ═══════════════════════════════════════════
+//  DOWNLOAD
+// ═══════════════════════════════════════════
+
+// ═══════════════════════════════════════════
+//  ML MODE — Transformers.js T5-small (runs in browser, ~60MB first load)
+// ═══════════════════════════════════════════
+let mlEnabled = false;
+let mlPipeline = null;
+let mlLoading = false;
+
+function setMLPanel(step, pct, detail) {
+  const panel = document.getElementById('mlLoadPanel');
+  if (panel) panel.style.display = 'block';
+  const stepEl = document.getElementById('mlLoadStep');
+  const pctEl = document.getElementById('mlLoadPct');
+  const bar = document.getElementById('mlProgressBar');
+  const detailEl = document.getElementById('mlLoadDetail');
+  if (stepEl) stepEl.textContent = step;
+  if (pctEl) pctEl.textContent = pct !== null ? pct + '%' : '';
+  if (bar) bar.style.width = (pct || 0) + '%';
+  if (detailEl) detailEl.textContent = detail || '';
+}
+
+function hideMLPanel() {
+  const panel = document.getElementById('mlLoadPanel');
+  if (panel) panel.style.display = 'none';
+}
+
+function toggleML() {
+  if (mlLoading) return;
+  if (mlEnabled) {
+    mlEnabled = false;
+    mlPipeline = null;
+    const btn = document.getElementById('mlBtn');
+    btn.style.background = 'var(--bg3)';
+    btn.style.color = 'var(--text)';
+    btn.style.boxShadow = '';
+    btn.textContent = '✦ ML';
+    document.getElementById('mlStatus').textContent = '';
+    document.getElementById('runBtn').textContent = '→ Optimize Prompt';
+    hideMLPanel();
+    return;
+  }
+  mlLoading = true;
+  const btn = document.getElementById('mlBtn');
+  const status = document.getElementById('mlStatus');
+  btn.textContent = '⟳ loading…';
+  btn.style.color = 'var(--amber)';
+  status.textContent = '';
+  setMLPanel('fetching ML runtime…', 5, 'loading transformers.js from CDN');
+
+  const s = document.createElement('script');
+  s.type = 'module';
+  s.textContent = `
+    try {
+      const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js');
+      env.allowLocalModels = false;
+      window._xenovaPipeline = pipeline;
+      window._xenovaReady = true;
+    } catch(e) {
+      window._xenovaError = e.message;
+    }
+  `;
+  document.head.appendChild(s);
+
+  // inline module scripts don't fire onload — poll directly
+  let tries = 0;
+  const poll = setInterval(() => {
+    tries++;
+    if (window._xenovaReady) {
+      clearInterval(poll);
+      setMLPanel('runtime ready — loading model…', 12, 'distilbart-cnn-6-6 quantized (~60MB, cached after first load)');
+      initMLPipeline(btn, status);
+    } else if (window._xenovaError || tries > 120) {
+      clearInterval(poll);
+      mlLoadFailed(btn, status, window._xenovaError || 'timeout');
+    }
+  }, 500);
+}
+
+function mlLoadFailed(btn, status, err) {
+  mlLoading = false;
+  btn.textContent = '✦ ML';
+  btn.style.color = 'var(--red)';
+  btn.style.background = 'var(--bg3)';
+  setMLPanel('failed to load', 0, err || 'check internet connection');
+  document.getElementById('mlProgressBar').style.background = 'var(--red)';
+}
+
+async function initMLPipeline(btn, status) {
+  try {
+    const pipelineFn = window._xenovaPipeline;
+    if (!pipelineFn) throw new Error('pipeline not available');
+
+    let lastFile = '';
+    let fileCount = 0;
+
+    mlPipeline = await pipelineFn('summarization', 'Xenova/distilbart-cnn-6-6', {
+      quantized: true,
+      progress_callback: p => {
+        if (p.status === 'initiate') {
+          setMLPanel('initialising model files…', 15, 'preparing download');
+        } else if (p.status === 'download') {
+          fileCount++;
+          lastFile = p.file || '';
+          setMLPanel('downloading…', 15, 'file ' + fileCount + ': ' + lastFile);
+        } else if (p.status === 'downloading') {
+          const pct = p.total ? Math.round(10 + (p.loaded / p.total) * 75) : 15;
+          const mb = p.loaded ? (p.loaded / 1048576).toFixed(1) : '0';
+          const total = p.total ? (p.total / 1048576).toFixed(1) : '?';
+          setMLPanel(
+            'downloading model weights…',
+            pct,
+            mb + ' MB / ' + total + ' MB — ' + (p.file || lastFile)
+          );
+        } else if (p.status === 'done') {
+          setMLPanel('loading weights into memory…', 90, 'almost ready…');
+        } else if (p.status === 'ready') {
+          setMLPanel('model ready!', 100, '');
+        }
+      }
+    });
+
+    mlEnabled = true;
+    mlLoading = false;
+    btn.textContent = '✦ ML on';
+    btn.style.background = 'var(--accent)';
+    btn.style.color = '#0e0e0f';
+    btn.style.boxShadow = '0 0 14px rgba(200,240,96,.4)';
+    status.textContent = '✓ ready';
+    status.style.color = 'var(--accent)';
+    document.getElementById('runBtn').textContent = '✦ ML Optimize';
+    setMLPanel('✓ model loaded and ready', 100, 'click Optimize to use ML compression');
+    setTimeout(() => hideMLPanel(), 3000);
+  } catch(e) {
+    mlLoading = false;
+    const btn2 = document.getElementById('mlBtn');
+    btn2.textContent = '✦ ML';
+    btn2.style.color = 'var(--red)';
+    setMLPanel('failed', 0, e.message);
+    document.getElementById('mlStatus').textContent = 'failed';
+    document.getElementById('mlStatus').style.color = 'var(--red)';
+  }
+}
+
+async function runML(text) {
+  if (!mlPipeline) return null;
+  try {
+    const inputLen = text.split(/\s+/).length;
+    const maxTok = Math.max(30, Math.round(inputLen * 0.45));
+    const minTok = Math.max(15, Math.round(inputLen * 0.25));
+    const result = await mlPipeline(text, {
+      max_new_tokens: maxTok,
+      min_new_tokens: minTok,
+      do_sample: false,
+    });
+    return result?.[0]?.summary_text?.trim() || null;
+  } catch(e) { return null; }
+}
+
+// ═══════════════════════════════════════════
+//  KEYBOARD SHORTCUT  Ctrl/Cmd + Enter
+// ═══════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    optimize();
+  }
+});
+let isOnline = navigator.onLine;
+
+function updateConnectionStatus() {
+  isOnline = navigator.onLine;
+  const dot = document.querySelector('.dot');
+  const label = document.getElementById('statusLabel');
+  if (isOnline) {
+    dot.className = 'dot online';
+    label.textContent = 'online · completely free · unlimited use';
+    label.style.color = 'var(--accent)';
+    loadCodespellDict();
+  } else {
+    dot.className = 'dot offline';
+    label.textContent = 'offline · no api · no key · completely free · unlimited use';
+    label.style.color = 'var(--text3)';
+  }
+}
+
+window.addEventListener('online',  updateConnectionStatus);
+window.addEventListener('offline', updateConnectionStatus);
+updateConnectionStatus();
+</script>
+</body>
+</html>
