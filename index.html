@@ -149,29 +149,18 @@ textarea::placeholder{color:var(--text3)}
 
 /* run */
 .run-wrap{position:relative;margin-bottom:20px}
-.run-btn{width:100%;padding:14px;background:var(--accent);color:#0e0e0f;border:none;border-radius:var(--r);font-family:'DM Mono',monospace;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:.05em;transition:background .3s,color .3s,box-shadow .3s;box-shadow:0 0 20px rgba(200,240,96,.4),0 2px 10px rgba(200,240,96,.25);position:relative;overflow:hidden}
+.run-btn{width:100%;padding:14px;background:var(--accent);border:none;border-radius:var(--r);font-family:'DM Mono',monospace;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:.05em;transition:background .2s,box-shadow .2s;box-shadow:0 0 20px rgba(200,240,96,.4),0 2px 10px rgba(200,240,96,.25);position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
 .run-btn:hover:not(:disabled){background:var(--accent2);transform:translateY(-1px);box-shadow:0 0 32px rgba(200,240,96,.6),0 4px 16px rgba(200,240,96,.35)}
 .run-btn:active:not(:disabled){transform:translateY(0)}
-/* loading state */
-.run-btn.loading{background:#0e0e0f;cursor:default;box-shadow:none;border:.5px solid rgba(200,240,96,.25)}
-.run-btn-fill{position:absolute;left:0;top:0;height:100%;width:0%;background:var(--accent);transition:width .5s ease;z-index:1;border-radius:var(--r);pointer-events:none}
-/* spinning border via conic-gradient pseudo */
-.run-btn.loading::before{content:'';position:absolute;inset:-1.5px;border-radius:calc(var(--r) + 1.5px);background:conic-gradient(from 0deg,transparent 70%,rgba(200,240,96,.7) 85%,rgba(200,240,96,1) 90%,rgba(200,240,96,.7) 95%,transparent 100%);animation:borderSpin 2.8s linear infinite;z-index:0}
-.run-btn.loading::after{content:'';position:absolute;inset:1.5px;border-radius:calc(var(--r) - 1px);background:#0e0e0f;z-index:1}
-@keyframes borderSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-.run-text{position:relative;z-index:2;pointer-events:none;user-select:none}
-/* empty area text — accent colored, hidden behind fill */
-.run-text-empty{color:#0e0e0f}.run-btn.loading .run-text-empty{color:var(--accent)}
-/* filled area text — dark, clipped to fill width */
-.run-text-filled{
-  position:absolute;left:0;top:0;width:100%;height:100%;
-  display:flex;align-items:center;justify-content:center;
-  color:#0e0e0f;z-index:3;
-  clip-path:inset(0 100% 0 0);
-  transition:clip-path .5s ease;
-  pointer-events:none;
-}
-/* percentage bar below button */
+.run-btn.loading{background:#0e0e0f;cursor:default;box-shadow:none;border:.5px solid rgba(200,240,96,.2)}
+.fill-track{position:absolute;left:0;top:0;height:100%;width:0%;background:var(--accent);border-radius:var(--r);z-index:1;transition:width .45s ease}
+#glowCanvas{position:absolute;left:0;top:0;height:100%;z-index:2;pointer-events:none}
+.btn-default{position:relative;z-index:5;color:#0e0e0f;pointer-events:none;user-select:none;font-size:13px;font-weight:700}
+.pct-wrap{display:none;position:relative;z-index:5;width:100%;text-align:center;pointer-events:none;user-select:none;font-size:15px;font-weight:700;letter-spacing:.06em}
+.pct-back{color:var(--accent);display:block}
+.pct-front{position:absolute;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#0e0e0f;clip-path:inset(0 100% 0 0);transition:clip-path .45s ease}
+.run-btn.loading .btn-default{display:none}
+.run-btn.loading .pct-wrap{display:block}
 
 
 /* output */
@@ -475,11 +464,13 @@ footer a:hover{color:var(--text2)}
   <div class="err" id="err"></div>
   <div class="run-wrap" id="runWrap" style="margin-bottom:20px">
     <button class="run-btn" id="runBtn" onclick="optimize()" style="margin-bottom:0">
-      <span id="runBtnInnerFill" class="run-btn-fill"></span>
-      <!-- text shown over empty (dark) area -->
-      <span id="runBtnText" class="run-text run-text-empty">→ Optimize Prompt</span>
-      <!-- text shown over filled (green) area — clipped -->
-      <span id="runBtnTextFilled" class="run-text run-text-filled" aria-hidden="true">→ Optimize Prompt</span>
+      <span class="fill-track" id="fillTrack"></span>
+      <canvas id="glowCanvas"></canvas>
+      <span class="btn-default">→ Optimize Prompt</span>
+      <span class="pct-wrap">
+        <span class="pct-back" id="pctBack">0%</span>
+        <span class="pct-front" id="pctFront">0%</span>
+      </span>
     </button>
   </div>
 
@@ -1576,7 +1567,8 @@ async function optimize() {
   clearErr();
 
   const btn = document.getElementById('runBtn');
-  setBtnLoading(5, 'starting…');
+  startGlow();
+  setBtnLoading(5, 'reading prompt…');
 
   const mode = currentMode;
   const type = currentType;
@@ -1585,8 +1577,8 @@ async function optimize() {
   let text = raw;
   let spellFixes = 0;
 
-  setBtnLoading(15, 'optimizing…');
-  await new Promise(r => setTimeout(r, 0));
+  setBtnLoading(15, 'removing fillers…');
+  await new Promise(r => setTimeout(r, 16));
 
   // ── Always-on: dedup + spell + repeated letters ──
   const { text: dd, removed: ddN } = deduplicate(text);
@@ -1607,8 +1599,8 @@ async function optimize() {
     changes.push({tag:'fixed', msg:`Fixed ${spN} spelling issue(s)${saved>0?' — saved ~'+saved+' tokens':''}.`});
   }
 
-  setBtnLoading(35, 'spell check…');
-  await new Promise(r => setTimeout(r, 0));
+  setBtnLoading(35, 'fixing spelling…');
+  await new Promise(r => setTimeout(r, 16));
   // Online spell (Datamuse) — only if online, runs after dict
   if (isOnline) {
     try {
@@ -1698,8 +1690,8 @@ async function optimize() {
     }
   }
 
-  setBtnLoading(60, 'NLP pass…');
-  await new Promise(r => setTimeout(r, 0));
+  setBtnLoading(60, 'compressing…');
+  await new Promise(r => setTimeout(r, 16));
   // ── NLP compression (compromise.js + stopword) — save + balanced ──
   if (mode === 'save' || mode === 'balanced') {
     const { text: nlpText, saved: nlpSaved, actions: nlpActions } = nlpCompress(text);
@@ -1710,8 +1702,8 @@ async function optimize() {
     }
   }
 
-  setBtnLoading(75, 'cleaning…');
-  await new Promise(r => setTimeout(r, 0));
+  setBtnLoading(75, 'cleaning up…');
+  await new Promise(r => setTimeout(r, 16));
   // ── Remove padding sentences — all modes ──
   const { text: pd, removed: pdN } = removePadding(text);
   if (pdN > 0) { text = pd; changes.push({tag:'removed', msg:`Removed ${pdN} padding sentence(s).`}); }
@@ -1721,7 +1713,7 @@ async function optimize() {
   text = text.charAt(0).toUpperCase() + text.slice(1);
 
   setBtnLoading(85, 'finalising…');
-  await new Promise(r => setTimeout(r, 0));
+  await new Promise(r => setTimeout(r, 16));
   // ── SAVE MODE STOPS HERE ──
   if (mode === 'balanced' || mode === 'quality') {
     const weakRe = [
@@ -1803,7 +1795,7 @@ async function optimize() {
 
   // ── ML pass — runs after regex, catches what rules missed ──
   if (mlEnabled && mlPipeline) {
-    setBtnLoading(90, 'ML running…');
+    setBtnLoading(90, 'ML compressing…');
     runML(final).then(mlResult => {
       if (mlResult && estTok(mlResult) < estTok(final)) {
         const mlChanges = [...changes, {tag:'rewritten', msg:`ML model (DistilBART) further compressed — saved ~${estTok(final)-estTok(mlResult)} more tokens.`}];
@@ -2292,41 +2284,79 @@ function toggleDiffView() {
   }
 }
 
+let _glowAnim=null;
+let _fillPct=0;
+
+function startGlow(){
+  const canvas=document.getElementById('glowCanvas');
+  const btn=document.getElementById('runBtn');
+  if(!canvas||!btn)return;
+  canvas.width=btn.offsetWidth;
+  canvas.height=btn.offsetHeight;
+  canvas.style.width=btn.offsetWidth+'px';
+  const ctx=canvas.getContext('2d');
+  let glowX=0;
+  const speed=2.2;
+  if(_glowAnim)cancelAnimationFrame(_glowAnim);
+  function loop(){
+    const btnW=btn.offsetWidth;
+    const fillW=btnW*(_fillPct/100);
+    if(canvas.width!==btnW){canvas.width=btnW;canvas.style.width=btnW+'px';}
+    canvas.height=btn.offsetHeight;
+    ctx.clearRect(0,0,btnW,btn.offsetHeight);
+    if(fillW>4){
+      if(glowX>fillW+40)glowX=0;
+      glowX+=speed;
+      const glowW=50;
+      const grad=ctx.createLinearGradient(glowX-glowW,0,glowX+glowW,0);
+      grad.addColorStop(0,'rgba(255,255,255,0)');
+      grad.addColorStop(0.3,'rgba(255,255,255,0.05)');
+      grad.addColorStop(0.5,'rgba(255,255,255,0.18)');
+      grad.addColorStop(0.7,'rgba(255,255,255,0.05)');
+      grad.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0,0,fillW,btn.offsetHeight);
+      ctx.clip();
+      ctx.fillStyle=grad;
+      ctx.fillRect(0,0,btnW,btn.offsetHeight);
+      ctx.restore();
+    } else { glowX=0; }
+    _glowAnim=requestAnimationFrame(loop);
+  }
+  loop();
+}
+
+function stopGlow(){
+  if(_glowAnim){cancelAnimationFrame(_glowAnim);_glowAnim=null;}
+  const canvas=document.getElementById('glowCanvas');
+  if(canvas){const ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);}
+}
+
 function setBtnLoading(pct, label) {
-  requestAnimationFrame(() => {
-    const btn = document.getElementById('runBtn');
-    const textEmpty = document.getElementById('runBtnText');
-    const textFilled = document.getElementById('runBtnTextFilled');
-    const fill = document.getElementById('runBtnInnerFill');
-    const msg = (label || 'optimizing') + '   ' + pct + '%';
-    if (btn) { btn.classList.add('loading'); btn.disabled = true; }
-    if (textEmpty) textEmpty.textContent = msg;
-    if (textFilled) {
-      textFilled.textContent = msg;
-      textFilled.style.clipPath = 'inset(0 ' + (100 - pct) + '% 0 0)';
-    }
-    if (fill) fill.style.width = pct + '%';
-  });
+  _fillPct=pct;
+  const btn=document.getElementById('runBtn');
+  const track=document.getElementById('fillTrack');
+  const back=document.getElementById('pctBack');
+  const front=document.getElementById('pctFront');
+  if(btn){btn.classList.add('loading');btn.disabled=true;}
+  if(track)track.style.width=pct+'%';
+  if(front)front.style.clipPath='inset(0 '+(100-pct)+'% 0 0)';
+  if(back)back.textContent=pct+'%';
+  if(front)front.textContent=pct+'%';
 }
 
 function resetBtn(label) {
-  requestAnimationFrame(() => {
-    const textEmpty = document.getElementById('runBtnText');
-    const textFilled = document.getElementById('runBtnTextFilled');
-    const fill = document.getElementById('runBtnInnerFill');
-    const msg = '100%';
-    if (textEmpty) textEmpty.textContent = msg;
-    if (textFilled) { textFilled.textContent = msg; textFilled.style.clipPath = 'inset(0 0% 0 0)'; }
-    if (fill) fill.style.width = '100%';
-    setTimeout(() => {
-      const btn = document.getElementById('runBtn');
-      const finalLabel = label || '→ Optimize Prompt';
-      if (btn) { btn.classList.remove('loading'); btn.disabled = false; }
-      if (textEmpty) textEmpty.textContent = finalLabel;
-      if (textFilled) { textFilled.textContent = finalLabel; textFilled.style.clipPath = 'inset(0 100% 0 0)'; }
-      if (fill) fill.style.width = '0%';
-    }, 500);
-  });
+  stopGlow();
+  _fillPct=0;
+  setTimeout(()=>{
+    const btn=document.getElementById('runBtn');
+    const track=document.getElementById('fillTrack');
+    const front=document.getElementById('pctFront');
+    if(btn){btn.classList.remove('loading');btn.disabled=false;}
+    if(track)track.style.width='0%';
+    if(front)front.style.clipPath='inset(0 100% 0 0)';
+  },500);
 }
 
 function copyResult() {
