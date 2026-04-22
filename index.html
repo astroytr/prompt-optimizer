@@ -2119,6 +2119,7 @@ const STEP_NOTES = {
   'cleaning up…':      'spacing + deduplication…',
   'restructuring…':    'instruction → context → constraints…',
   'finalising…':       'adding quality signals…',
+  'normalising…':      'restructuring informal/emoji prompts into sentences…',
   'ML compressing…':   'DistilBART inference (5–30s on first run)…',
   'meaning check…':    'verifying all key terms preserved…',
 };
@@ -2160,6 +2161,121 @@ function stopCountdown() {
 }
 
 // ═══════════════════════════════════════════
+//  INFORMAL PROMPT NORMALIZER
+//  Runs before everything else on casual/emoji/run-on prompts.
+//  Splits the blob into sentences, strips pure emoji-filler,
+//  and re-punctuates so detectPromptSegments() can classify correctly.
+// ═══════════════════════════════════════════
+
+// Emoji-only tokens that carry zero semantic content for a prompt
+const _PURE_EMOJI_RE = /[\u{1F300}-\u{1FFFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FEFF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F1FF}\u{1F200}-\u{1F2FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}]+/gu;
+
+function _isInformal(text) {
+  // Heuristic: high emoji density OR no sentence-ending punctuation on a multi-word prompt
+  // OR heavy use of casual connectors like "nd", "n", "wit", "lik"
+  const emojiCount = (text.match(_PURE_EMOJI_RE) || []).length;
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  if (emojiCount >= 3 && wordCount > 15) return true;
+  const casualWords = (text.match(/\b(nd|n |wit |lik |gose|ses|reely|meen|angrey|butt |twisstty|evryy|pew|woah)\b/gi) || []).length;
+  if (casualWords >= 2) return true;
+  // No sentence-ending punctuation in a long prompt
+  if (wordCount > 20 && !/[.!?]/.test(text)) return true;
+  return false;
+}
+
+// Connector words that separate clauses in informal text
+const _INFORMAL_CONJUNCTIONS = /\s+(?:and\s+then|and\s+also|and|then|but|nd\s+then|nd|n\s+then|n\b)\s+/gi;
+
+// Remove emoji from the text (they're decorative in a prompt, not instruction)
+function _stripEmoji(text) {
+  return text.replace(_PURE_EMOJI_RE, '').replace(/\s{2,}/g, ' ').trim();
+}
+
+// Attempt to split run-on informal text into discrete sentences
+// Strategy: split on "and then" / "nd" / "but" / ", and" as sentence boundaries
+// but only when the resulting fragment is a meaningful clause (>3 words)
+function normalizeInformalPrompt(text) {
+  if (!_isInformal(text)) return { text, normalized: false };
+
+  // 1. Strip emojis first
+  let clean = _stripEmoji(text);
+
+  // 2. Lowercase-normalize common misspellings that block parsing
+  const quickFix = [
+    [/\bnd\b/gi, 'and'],
+    [/\bwit\b(?=\s+[a-z])/gi, 'with'],
+    [/\blik\b(?=\s+[a-z])/gi, 'like'],
+    [/\bgose\b/gi, 'goes'],
+    [/\bses\b/gi, 'sees'],
+    [/\breely\b/gi, 'really'],
+    [/\bmeen\b/gi, 'mean'],
+    [/\bangrey\b/gi, 'angry'],
+    [/\bwit\b/gi, 'with'],
+    [/\btwisstty\b/gi, 'twisty'],
+    [/\btwisstted\b/gi, 'twisted'],
+    [/\bevryywhere\b/gi, 'everywhere'],
+    [/\bevryy\b/gi, 'every'],
+    [/\bsmol\b/gi, 'small'],
+    [/\bidk\b/gi, '(you decide)'],
+    [/\bpls\b/gi, 'please'],
+    [/\babot\b/gi, 'about'],
+    [/\batt\b/gi, 'at'],
+    [/\bbutt\b(?=\s+also|\s+make|\s+it|\s+the|\s+a\b)/gi, 'but'],
+    [/\blik\b/gi, 'like'],
+    [/\bwit\b/gi, 'with'],
+    [/\btoo\b(?=\s+spase|\s+space)/gi, 'to'],
+    [/\bspase\b/gi, 'space'],
+    [/\balieen(s?)\b/gi, 'alien$1'],
+    [/\blazerz\b/gi, 'lasers'],
+    [/\bexplotion\b/gi, 'explosion'],
+    [/\bscarry\b/gi, 'scary'],
+    [/\bfuny\b/gi, 'funny'],
+    [/\bfunyy\b/gi, 'funny'],
+    [/\bsam\b(?=\s+time)/gi, 'same'],
+    [/\bwroite\b/gi, 'write'],
+    [/\bwrit\b(?=\s+me|\s+a|\s+an)/gi, 'write'],
+    [/\bstorry\b/gi, 'story'],
+    [/\bboi\b/gi, 'boy'],
+    [/\bgose\b/gi, 'goes'],
+    [/\bpew\s+pew\b/gi, 'laser fire'],
+    [/\brun\s+run\b/gi, 'runs'],
+    [/\bcry\s+n\s+sad\b/gi, 'emotional and sad'],
+    [/\bwit\s+echho\s+echo\b/gi, 'with an eerie echo'],
+    [/\bechho\s+echo\b/gi, 'eerie echo'],
+    [/\bwit\b/gi, 'with'],
+    [/\batt\s+sam\s+time\b/gi, 'at the same time'],
+    [/\bwoah\b/gi, 'wow'],
+    [/\bjust\s+happened\?{1,}/gi, 'just happened?'],
+    [/\bmaybbe\b/gi, 'maybe'],
+    [/\b(tripple|trippple)\b/gi, 'triple'],
+  ];
+  quickFix.forEach(([r, v]) => { clean = clean.replace(r, v); });
+
+  // 3. Split into clauses on major connectors + "then X"
+  // Use a lookahead split so we don't lose the clause-starting word
+  // Split boundaries: "and then", "but then", "then", "but", standalone "and" between long clauses
+  const splitRe = /\s*,?\s*(?:and\s+then|but\s+then|and\s+also|then\s+big|then\s+he|then\s+boom|then\s+something|then\s+make|then\s+at\s+end|then\s+the\s+alien|at\s+end\s+make|at\s+the\s+end)\s*/gi;
+  let clauses = clean.split(splitRe).map(c => c.trim()).filter(c => c.split(/\s+/).length >= 3);
+
+  // If splitting didn't work well (e.g. only 1 clause), return cleaned text without restructuring
+  if (clauses.length < 2) {
+    // Still return the cleaned/fixed text
+    return { text: clean.replace(/\s{2,}/g,' ').trim(), normalized: true };
+  }
+
+  // 4. Capitalise each clause and end with punctuation
+  clauses = clauses.map(c => {
+    c = c.trim();
+    if (!c) return '';
+    c = c.charAt(0).toUpperCase() + c.slice(1);
+    if (!/[.!?]$/.test(c)) c += '.';
+    return c;
+  }).filter(Boolean);
+
+  return { text: clauses.join(' '), normalized: true };
+}
+
+// ═══════════════════════════════════════════
 //  MAIN OPTIMIZER
 // ═══════════════════════════════════════════
 async function optimize() {
@@ -2181,6 +2297,15 @@ async function optimize() {
   const changes = [];
   let text = raw;
   let spellFixes = 0;
+
+  // ── Pre-pass: normalize informal/emoji/run-on prompts ──
+  setBtnLoading(3, 'normalising…');
+  await new Promise(r => setTimeout(r, 0));
+  const { text: normText, normalized: wasNormalized } = normalizeInformalPrompt(text);
+  if (wasNormalized && normText !== text) {
+    text = normText;
+    changes.push({tag:'rewritten', msg:'Informal prompt restructured into sentences for better parsing.'});
+  }
 
   // ── Always-on: dedup + spell + repeated letters ──
   const { text: dd, removed: ddN } = deduplicate(text);
@@ -2482,7 +2607,10 @@ async function optimize() {
       if (hasEx2)     body2 += `\n\n<example>\n${byRole2.example.join(' ')}\n</example>`;
       xmlText = body2;
     } else if (worthXML2 && hasConstr2) {
-      body2 = `<instructions>\n${text}\n</instructions>\n\n<constraints>\n${byRole2.constraint.join('. ')}\n</constraints>`;
+      // Only put non-constraint sentences in <instructions> to avoid duplication
+      const instrParts = [...byRole2.instruction, ...byRole2.question, ...byRole2.other];
+      const instrText = instrParts.length > 0 ? instrParts.join(' ') : text;
+      body2 = `<instructions>\n${instrText}\n</instructions>\n\n<constraints>\n${byRole2.constraint.join('. ')}\n</constraints>`;
       xmlText = body2;
     }
     // fileNames appended after XML
