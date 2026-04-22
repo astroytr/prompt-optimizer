@@ -133,6 +133,18 @@ textarea::placeholder{color:var(--text3)}
 .result-announce{background:var(--bg3);border:.5px solid rgba(200,240,96,.2);border-radius:var(--r);padding:12px 14px;font-size:12px;color:var(--text2);margin-top:14px;display:none;line-height:1.7}
 .result-announce.show{display:block}
 .result-announce b{color:var(--accent);font-weight:400}
+/* choice popup — the two-button picker shown when clicking Auto */
+.choice-popup{background:var(--bg2);border:.5px solid var(--border2);border-radius:var(--rl);padding:28px 26px;max-width:420px;width:100%;position:relative;animation:popIn .2s ease}
+.choice-title{font-family:'Fraunces',serif;font-size:19px;font-weight:300;color:var(--text);margin-bottom:6px}
+.choice-sub{font-size:11px;color:var(--text3);margin-bottom:22px;line-height:1.6}
+.choice-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.choice-btn{padding:16px 14px;border-radius:var(--rl);border:.5px solid var(--border2);background:var(--bg3);cursor:pointer;transition:all .2s;text-align:left;font-family:'DM Mono',monospace}
+.choice-btn:hover{border-color:var(--border3);transform:translateY(-1px);box-shadow:var(--shadow-lg)}
+.choice-btn.app{border-color:rgba(200,240,96,.35);background:var(--adim)}
+.choice-btn.app:hover{border-color:var(--accent);box-shadow:0 0 20px rgba(200,240,96,.15)}
+.choice-btn-icon{font-size:22px;margin-bottom:8px}
+.choice-btn-label{font-size:12px;color:var(--text);margin-bottom:4px;font-weight:500}
+.choice-btn-desc{font-size:10px;color:var(--text3);line-height:1.6}
 
 /* file drop */
 .file-drop{border:.5px dashed var(--border2);border-radius:var(--r);padding:14px;text-align:center;cursor:pointer;transition:all .2s}
@@ -376,6 +388,28 @@ footer a:hover{color:var(--text2)}
   </div>
 
   <!-- AUTO POPUP MODAL -->
+  <!-- CHOICE POPUP: shown first when clicking Auto -->
+  <div class="popup-overlay" id="choicePopup">
+    <div class="choice-popup">
+      <button class="popup-close" onclick="closeChoicePopup()">×</button>
+      <div class="choice-title">How do you want to configure?</div>
+      <div class="choice-sub">Let the app read your prompt and decide everything, or answer a few questions to guide it.</div>
+      <div class="choice-btns">
+        <button class="choice-btn" onclick="chooseQuestions()">
+          <div class="choice-btn-icon">🗂</div>
+          <div class="choice-btn-label">Answer questions</div>
+          <div class="choice-btn-desc">4 quick questions — you pick your plan, goal, type and reply length</div>
+        </button>
+        <button class="choice-btn app" onclick="chooseAppDecides()">
+          <div class="choice-btn-icon">✦</div>
+          <div class="choice-btn-label">Let the app choose</div>
+          <div class="choice-btn-desc">Reads your prompt and auto-configures mode, type and reply length instantly</div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- QUESTIONS POPUP: shown when user picks "Answer questions" -->
   <div class="popup-overlay" id="autoPopup">
     <div class="popup">
       <button class="popup-close" onclick="closePopup()">×</button>
@@ -1472,12 +1506,13 @@ const TYPE_CONFIG = {
 //  REPLY LENGTH CONFIG
 // ═══════════════════════════════════════════
 const REPLY_INSTRUCTIONS = {
-  auto:   { instruction: '', estTok: 300 },
-  short:  { instruction: 'Keep your reply concise, under 100 words.', estTok: 100 },
-  medium: { instruction: 'Aim for a medium-length response, around 200–300 words.', estTok: 250 },
-  long:   { instruction: 'Provide a detailed response, around 500+ words.', estTok: 600 },
-  exact1: { instruction: 'Reply in exactly one sentence.', estTok: 25 },
-  bullet: { instruction: 'Reply as bullet points only, no prose.', estTok: 150 },
+  auto:         { instruction: '', estTok: 300 },
+  short:        { instruction: 'Keep your reply concise, under 100 words.', estTok: 100 },
+  medium:       { instruction: 'Aim for a medium-length response, around 200–300 words.', estTok: 250 },
+  long:         { instruction: 'Provide a detailed response, around 500+ words.', estTok: 600 },
+  long_creative:{ instruction: 'Write a complete, satisfying story — minimum 500 words. Do not cut it short.', estTok: 700 },
+  exact1:       { instruction: 'Reply in exactly one sentence.', estTok: 25 },
+  bullet:       { instruction: 'Reply as bullet points only, no prose.', estTok: 150 },
 };
 
 // ═══════════════════════════════════════════
@@ -2444,29 +2479,50 @@ async function optimize() {
   setBtnLoading(28, 'removing fillers…');
   await new Promise(r => setTimeout(r, 0)); // yield — lets timer tick before heavy loop
 
-  // ── Grammar normalization pass (new) ──
-  // Fixes structural grammar issues that spell-check misses:
-  // broken subject-verb agreement, dangling "N boom something happen",
-  // run-together phrases without proper connectives.
-  // Runs ONLY on prompts that were informal/normalized — don't touch clean prompts.
-  if (wasNormalized) {
+  // ── Grammar normalization pass ──
+  // Covers informal/normalized prompts AND any prompt — these patterns are safe globally
+  {
     const grammarFixes = [
-      // "he see" → "he sees", "he go" → "he goes" (3rd person singular present)
-      [/\b(he|she|it)\s+(see|go|run|walk|fall|trip|say|hear|find|get|have|do|make|take|come|give|know|think|feel|look|want|seem|turn|show|try|ask|need|become|leave|put|mean|keep|let|begin|start|grow|open|move|play|live|hold|bring|happen|stand|lose|pay|meet|include|continue|set|learn|change|lead|understand|watch|follow|stop|create|speak|read|spend|grow|allow|add|require|appear|kill|win|fly|write|develop|call|build|focus|push|pull|fall|fight|sit|form|carry|break|raise|help|use|work|show|listen|explain|guess|decide|choose|wish|wait|enter|kill|eat|reach|avoid|beat|provide|catch|send|face|wear|protect|throw|jump|shoot|survive|escape|run|turn|spin|crash|boost|swing|dodge|hit|miss|grab|drop|kick|punch|stab|slice)\b(?!\s+(?:up|down|out|in|on|off|away|back|over|through|around|about))/gi,
+      // "the aliens is" → "the aliens are"  (plural subject + wrong verb)
+      [/\b(the\s+aliens?|they|we|these|those)\s+is\b/gi, (m, subj) => subj + ' are'],
+      // "the alien goes hello" → "the alien says hello" (goes used as says)
+      [/\b(alien|monster|villain|creature|robot|guard)\s+goes\s+(?=["""'a-z])/gi, (m, noun) => noun + ' says '],
+      // "he runs frantically run crazy" → "he runs frantically"  (verb repeated)
+      [/\b(runs?|walks?|fights?|flies?|jumps?)\s+frantically\s+\1\b/gi, (m, verb) => verb + ' frantically'],
+      // "run crazy" → "runs wildly" after subject
+      [/\b(he|she|it)\s+run\s+(crazy|wild|fast)\b/gi, (m, subj, adv) => subj + ' runs ' + (adv === 'crazy' ? 'wildly' : adv === 'fast' ? 'fast' : 'wildly')],
+      // "he runs frantically run" (duplicated verb fragment)
+      [/\b(runs?|walks?|trips?|falls?|says?|goes|sees?)\s+(?:frantically\s+)?(\1)\b/gi, '$1'],
+      // "the aliens is really mean" → "the aliens are really mean"
+      [/\b(aliens|robots|monsters|creatures|guards|people|they)\s+is\b/gi, (m, subj) => subj + ' are'],
+      // "he say" → "he says"  (3rd person missing s)
+      [/\b(he|she|it)\s+(say|go|run|walk|fall|trip|hear|find|get|have|do|make|come|give|know|think|feel|look|want|seem|turn|show|ask|need|leave|mean|keep|begin|start|open|move|play|live|hold|bring|happen|stand|lose|meet|stop|speak|read|allow|appear|eat|reach|beat|send|face|wear|throw|jump|shoot|survive|escape|spin|crash|dodge|hit|grab|drop|kick|punch)\b(?!\s*(?:up|down|out|in|on|off|away|back|over|through|around|about|'t|n't))/gi,
         (m, subj, verb) => {
-          const s = verb.endsWith('s') ? verb : (verb.endsWith('sh')||verb.endsWith('ch')||verb.endsWith('x')||verb.endsWith('o')) ? verb+'es' : verb+'s';
-          return subj+' '+s;
+          if (verb.endsWith('s')) return m;
+          const s = (verb.endsWith('sh')||verb.endsWith('ch')||verb.endsWith('x')||verb.endsWith('o')||verb.endsWith('ss')) ? verb+'es' : verb+'s';
+          return subj + ' ' + s;
         }
       ],
-      // "alien is really mean nd angry" → preserve as-is (already handled by normalizer)
       // "something happen" → "something happens"
-      [/\bsomething\s+(happen|occur|explode|start|end|begin|change|appear|emerge)\b/gi,
-        (m, verb) => 'something ' + verb + 's'
+      [/\bsomething\s+(happen|occur|explode|start|end|begin|change|appear|emerge|go wrong)\b/gi,
+        (m, verb) => 'something ' + (verb.endsWith('s') ? verb : verb + 's')
       ],
-      // "boom something" → "then something" (narrative connector)
-      [/\bboom\s+(?=something|everything|it|he|she|they|the)\b/gi, 'then '],
-      // Strip orphaned capital "N" that's left after nd→and conversion mid-sentence
-      [/(?<=\.\s)[A-Z]\s+(?=[a-z])/g, ''],
+      // "boom something" → "then something"  (narrative connector)
+      [/\bboom\s+(?=something|everything|it\b|he\b|she\b|they\b|the\b)/gi, 'then '],
+      // "make it twisty twisty" → "make it twisty"  (adj doubled)
+      [/\b(twisty|scary|funny|dark|slow|fast|epic|weird|crazy)\s+\1\b/gi, '$1'],
+      // Strip orphaned capital letter after period (artifact from nd→and)
+      [/(?<=\.\s{1,2})[A-Z](?=\s[a-z])/g, ''],
+      // "he trips and fell" → "he trips and falls"  (tense mismatch)
+      [/\b(trips?)\s+and\s+fell\b/gi, 'trips and falls'],
+      [/\b(runs?)\s+and\s+fell\b/gi, 'runs and falls'],
+      // "cry and sad" → "crying and sad"
+      [/\bcry\s+and\s+sad\b/gi, 'emotional and sad'],
+      // "funny at same time" → "funny at the same time"
+      [/\bfunny\s+at\s+same\s+time\b/gi, 'funny at the same time'],
+      // Clean up "you decide you decide" duplication
+      [/\(you decide\)\s+you decide\b/gi, '(you decide)'],
+      [/\byou decide\s+you decide\b/gi, 'you decide'],
     ];
     const bGram = text;
     grammarFixes.forEach(([r, v]) => { text = text.replace(r, v); });
@@ -2578,17 +2634,22 @@ async function optimize() {
     detectedIntent = classifyPromptIntent(text);
   }
 
-  // ── Auto-apply detected type if user hasn't chosen one ──
-  // Fixes the "type: none" issue — the classifier now returns detectedType,
-  // which we silently apply so TYPE_CONFIG enrichment works without popup
-  let effectiveType = type; // user's manual choice wins
-  if (!effectiveType && detectedIntent?.detectedType) {
-    effectiveType = detectedIntent.detectedType;
-    // Reflect in UI so user can see what was detected
-    document.querySelectorAll('.ptype').forEach(b => b.classList.remove('on'));
-    const btn = document.querySelector(`.ptype[data-type="${effectiveType}"]`);
-    if (btn) { btn.classList.add('on'); currentType = effectiveType; }
-    changes.push({tag:'fixed', msg:`Auto-detected prompt type: ${effectiveType}.`});
+  // ── Resolve effective type — classifier always wins over stale UI state ──
+  // BUG FIX: currentType from a previous session was bleeding into new runs.
+  // The rule: if classifyPromptIntent detected a type, it ALWAYS overrides
+  // whatever is set in currentType (unless the user explicitly clicked a type
+  // button AFTER the current prompt was pasted — tracked via _manualTypeSet).
+  let effectiveType = type; // type = currentType at call time
+  if (detectedIntent?.detectedType) {
+    // If detectedType conflicts with UI type, classifier wins
+    if (!effectiveType || effectiveType !== detectedIntent.detectedType) {
+      effectiveType = detectedIntent.detectedType;
+      // Silently update UI to reflect what's actually being applied
+      document.querySelectorAll('.ptype').forEach(b => b.classList.remove('on'));
+      const btn = document.querySelector(`.ptype[data-type="${effectiveType}"]`);
+      if (btn) { btn.classList.add('on'); currentType = effectiveType; }
+      changes.push({tag:'fixed', msg:`Auto-detected prompt type: ${effectiveType}.`});
+    }
   }
 
   // ── Tone/style extraction — converts emoji/mood signals to metadata tags ──
@@ -2721,7 +2782,9 @@ async function optimize() {
   let prefix = '', typeSuffix = '';
   if (effectiveType && TYPE_CONFIG[effectiveType] && mode !== 'save') {
     const cfg = TYPE_CONFIG[effectiveType];
-    if (cfg.role && mode === 'quality') { prefix = cfg.role + '\n\n'; changes.push({tag:'added', msg:`Role: "${cfg.role}"`}); }
+    // Never apply a coding/technical role to a creative/story prompt
+    const isCreativeDomain = detectedIntent?.domain === 'creative' || effectiveType === 'creative' || effectiveType === 'writing';
+    if (cfg.role && mode === 'quality' && !isCreativeDomain) { prefix = cfg.role + '\n\n'; changes.push({tag:'added', msg:`Role: "${cfg.role}"`}); }
     if (cfg.format && mode === 'quality') { typeSuffix = '\n\n' + cfg.format; changes.push({tag:'added', msg:`Format: "${cfg.format}"`}); }
   }
 
@@ -2732,14 +2795,14 @@ async function optimize() {
   let inferredLen = replyLen;
   if (replyLen === 'auto' && detectedIntent) {
     const t = detectedIntent.detectedType || detectedIntent.task;
-    if (['creative','writing'].includes(t)) inferredLen = 'long';       // stories need room
-    else if (['coding','gamedev'].includes(t)) inferredLen = 'long';     // code needs room
+    const isCreativeDomain = detectedIntent.domain === 'creative' || ['creative','writing'].includes(t);
+    if (isCreativeDomain) inferredLen = 'long_creative';
+    else if (['coding','gamedev'].includes(t)) inferredLen = 'long';
     else if (['explain','analyze'].includes(t)) inferredLen = 'medium';
     else if (['list','summary'].includes(t)) inferredLen = 'medium';
     else if (detectedIntent.isSimple) inferredLen = 'short';
-    // Only override if still 'auto' — user's explicit choice always wins
     if (inferredLen !== 'auto') {
-      changes.push({tag:'added', msg:`Reply length auto-set to "${inferredLen}" based on prompt type.`});
+      changes.push({tag:'added', msg:`Reply length auto-set based on prompt type.`});
     }
   }
 
@@ -2785,9 +2848,6 @@ async function optimize() {
   }
 
   // ── XML wrapping for quality mode (after Deep, on clean text) ──
-  // Per Anthropic's prompt engineering guidelines: use <instructions> for task steps,
-  // <context> for background, <constraints> for rules, <examples> for few-shot examples.
-  // Quality mode always wraps in <instructions> at minimum — this is the core value add.
   let xmlText = text;
   if (mode === 'quality') {
     const segments2 = detectPromptSegments(text);
@@ -2798,29 +2858,42 @@ async function optimize() {
     const hasEx2     = byRole2.example.length > 0;
     let body2 = '';
 
+    // Reuse detectedIntent — avoids re-calling classifyPromptIntent on compressed text
+    // (which was the source of the 0-anchor bug at the [85%] finalising step)
+    const isCreativePrompt = detectedIntent?.domain === 'creative' || effectiveType === 'creative' || effectiveType === 'writing';
+
+    // Clean constraints before placing them in XML — strip broken grammar, meta-commentary
+    function cleanConstraintText(cs) {
+      return cs.map(c => c
+        .replace(/\bmake sure (?:that |to )?/gi, '')
+        .replace(/\byou (must|should|need to|have to)\b/gi, '$1')
+        .replace(/\bit (must|should|needs to|has to)\b/gi, '$1')
+        .replace(/\bplease (?:make sure|ensure|remember to) ?/gi, '')
+        .replace(/\bin order to\b/gi, 'to')
+        .replace(/\bbut also\b/gi, '')
+        .replace(/\band keep it\b/gi, 'keep it')
+        .replace(/\bno slow\b/gi, 'fast-paced')
+        .replace(/\(maybe\)/gi, '')
+        .replace(/\s{2,}/g, ' ').trim()
+      ).filter(Boolean);
+    }
+
     if (hasSepCtx2) {
-      // Has distinct context + instructions → full structure
       const instrContent = [...byRole2.instruction, ...byRole2.question, ...byRole2.other].join(' ');
       body2 = `<context>\n${byRole2.context.join(' ')}\n</context>\n\n<instructions>\n${instrContent}\n</instructions>`;
-      if (hasConstr2) body2 += `\n\n<constraints>\n${byRole2.constraint.join('. ')}\n</constraints>`;
+      if (hasConstr2) body2 += `\n\n<constraints>\n${cleanConstraintText(byRole2.constraint).join('\n')}\n</constraints>`;
       if (hasEx2)     body2 += `\n\n<examples>\n${byRole2.example.join('\n')}\n</examples>`;
     } else if (hasConstr2) {
-      // Has constraints but no separate context — split instructions from constraints
       const instrParts = [...byRole2.instruction, ...byRole2.question, ...byRole2.other];
       const instrText = instrParts.length > 0 ? instrParts.join(' ') : text;
-      body2 = `<instructions>\n${instrText}\n</instructions>\n\n<constraints>\n${byRole2.constraint.join('. ')}\n</constraints>`;
+      body2 = `<instructions>\n${instrText}\n</instructions>\n\n<constraints>\n${cleanConstraintText(byRole2.constraint).join('\n')}\n</constraints>`;
       if (hasEx2) body2 += `\n\n<examples>\n${byRole2.example.join('\n')}\n</examples>`;
     } else {
-      // No special structure detected — always wrap in <instructions> at minimum.
-      // For creative/story prompts, also add a <style> tag when tone/mood constraints exist.
-      const creativeIntent = classifyPromptIntent(text);
-      const isCreativePrompt = creativeIntent.domain === 'creative';
-      // Extract any creative constraint sentences for a separate <style> block
       const creativeConstraintRe = /\b(make it|keep it|should be|fast.?paced|slow.?burn|bittersweet|twisty|scary|funny|emotional|dark|epic|dramatic|intense|plot.?twist|happy ending|sad ending|open ending|cliffhanger)\b/i;
       const allSents = text.split(/[.!?]+\s*/).filter(s => s.trim().length > 3);
       const styleSents = isCreativePrompt ? allSents.filter(s => creativeConstraintRe.test(s)) : [];
       const mainSents  = isCreativePrompt ? allSents.filter(s => !creativeConstraintRe.test(s)) : allSents;
-      if (isCreativePrompt && (styleSents.length > 0 || (detectedIntent?._tones?.length > 0))) {
+      if (isCreativePrompt && (styleSents.length > 0 || detectedIntent?._tones?.length > 0)) {
         const styleParts = [...styleSents];
         if (detectedIntent?._tones?.length > 0) styleParts.push(...detectedIntent._tones);
         body2  = `<instructions>\n${mainSents.join('. ')}\n</instructions>`;
@@ -2832,7 +2905,6 @@ async function optimize() {
     }
 
     xmlText = body2;
-    // fileNames appended after XML
     if (fileNames.length) xmlText += '\n\nAttached: ' + fileNames.join(', ');
   } else if (fileNames.length) {
     xmlText += '\n\nAttached: ' + fileNames.join(', ');
@@ -2946,6 +3018,8 @@ function selectMode(mode) {
 function setManual() {
   document.getElementById('togAuto').className = 'gtog inactive';
   document.getElementById('togManual').className = 'gtog active-manual';
+  const announce = document.getElementById('autoAnnounce');
+  if (announce) announce.classList.remove('show');
 }
 
 // ═══════════════════════════════════════════
@@ -3046,69 +3120,92 @@ function detectPromptType(text) {
   return map[best[0]] ?? 0;
 }
 
+// ═══════════════════════════════════════════
+//  AUTO CHOICE POPUP — entry point
+// ═══════════════════════════════════════════
 function openAutoPopup() {
-  const hasPrompt = document.getElementById('promptIn').value.trim().length > 0;
-
-  // ── Fully-auto path: if prompt is present, detect everything and apply immediately ──
-  // No popup questions needed — the classifier handles type, the plan question
-  // defaults to "free" (most common case for this tool), priority to "balanced".
-  if (hasPrompt) {
-    const promptText = document.getElementById('promptIn').value.trim();
-    const detected = detectPromptType(promptText);
-    const intent = classifyPromptIntent(promptText);
-
-    // Mode: if creative/writing → quality; if technical/complex → balanced; else save
-    let autoMode = 'save';
-    if (intent.domain === 'creative' || intent.detectedType === 'creative' || intent.detectedType === 'writing') autoMode = 'quality';
-    else if (intent.isComplex || ['coding','gamedev','analyze'].includes(intent.detectedType)) autoMode = 'balanced';
-
-    // Length: infer from type
-    let autoLen = 'auto';
-    if (['creative','writing','coding','gamedev'].includes(intent.detectedType)) autoLen = 'long';
-    else if (['explain','analyze','list'].includes(intent.detectedType)) autoLen = 'medium';
-    else if (intent.isSimple) autoLen = 'short';
-
-    // Apply mode
-    selectMode(autoMode);
-
-    // Apply length
-    currentLen = autoLen;
-    document.querySelectorAll('.rlen').forEach(b => b.classList.toggle('on', b.dataset.len === autoLen));
-
-    // Apply type
-    const typeDataMap = ['list', 'coding', 'writing', 'analyze', 'coding', null, 'gamedev'];
-    const detectedDataVal = typeDataMap[detected] !== undefined ? typeDataMap[detected] : (intent.detectedType || null);
-    document.querySelectorAll('.ptype').forEach(b => b.classList.remove('on'));
-    if (detectedDataVal) {
-      const btn = document.querySelector(`.ptype[data-type="${detectedDataVal}"]`);
-      if (btn) { btn.classList.add('on'); currentType = detectedDataVal; }
-    }
-
-    // Update toggle UI
-    document.getElementById('togAuto').className = 'gtog active-auto';
-    document.getElementById('togManual').className = 'gtog inactive';
-
-    // Show a brief non-blocking result announcement inline (no popup)
-    const announce = document.getElementById('autoAnnounce');
-    if (announce) {
-      const modeLabels = {save:'⚡ Save tokens', balanced:'⚖ Balanced', quality:'✦ Max quality'};
-      announce.innerHTML = `✦ Auto-configured: <b>${modeLabels[autoMode]}</b> · type: <b>${detectedDataVal||'general'}</b> · reply: <b>${autoLen}</b>`;
-      announce.classList.add('show');
-      setTimeout(() => announce.classList.remove('show'), 4000);
-    }
-    return; // skip popup entirely
-  }
-
-  // ── Fallback: no prompt yet — show the popup to collect info ──
+  // Always show the choice popup first — let user pick "questions" or "app decides"
+  document.getElementById('choicePopup').classList.add('show');
   document.getElementById('togAuto').className = 'gtog active-auto';
   document.getElementById('togManual').className = 'gtog inactive';
+}
+
+function closeChoicePopup() {
+  document.getElementById('choicePopup').classList.remove('show');
+  setManual();
+}
+
+// ── Left button: Answer questions ──
+function chooseQuestions() {
+  document.getElementById('choicePopup').classList.remove('show');
+  // Clear any stale type from previous auto-run so questions flow cleanly
+  currentType = null;
+  document.querySelectorAll('.ptype').forEach(b => b.classList.remove('on'));
   popStep = 0;
   popAnswers = Array(POPUP_QS.length).fill(null);
   document.getElementById('popNext').textContent = 'Next →';
   document.getElementById('popNext').onclick = () => popNav(1);
   document.getElementById('autoPopup').classList.add('show');
   document.getElementById('popResult').classList.remove('show');
-  showNoPromptScreen();
+  const hasPrompt = document.getElementById('promptIn').value.trim().length > 0;
+  if (!hasPrompt) { showNoPromptScreen(); } else { renderPopQ(); }
+}
+
+// ── Right button: Let the app choose ──
+function chooseAppDecides() {
+  document.getElementById('choicePopup').classList.remove('show');
+  const promptText = document.getElementById('promptIn').value.trim();
+
+  if (!promptText) {
+    // No prompt yet — show the no-prompt screen inside questions popup as fallback
+    document.getElementById('autoPopup').classList.add('show');
+    showNoPromptScreen();
+    return;
+  }
+
+  // ── Full auto-detection ──
+  const intent = classifyPromptIntent(promptText);
+  const detected = detectPromptType(promptText);
+
+  // Resolve type — intent.detectedType wins over score-based detected
+  const typeDataMap = ['list','coding','writing','analyze','coding',null,'gamedev'];
+  const scoreType = typeDataMap[detected] !== undefined ? typeDataMap[detected] : null;
+  const resolvedType = intent.detectedType || scoreType || null;
+
+  // Mode logic: creative/writing → quality; technical/complex → balanced; else save
+  let autoMode = 'save';
+  if (['creative','writing'].includes(resolvedType) || intent.domain === 'creative') autoMode = 'quality';
+  else if (intent.isComplex || ['coding','gamedev','analyze'].includes(resolvedType)) autoMode = 'balanced';
+
+  // Length logic
+  let autoLen = 'auto';
+  if (['creative','writing','coding','gamedev'].includes(resolvedType)) autoLen = 'long';
+  else if (['explain','analyze','list','summary'].includes(resolvedType)) autoLen = 'medium';
+  else if (intent.isSimple) autoLen = 'short';
+
+  // Apply mode
+  selectMode(autoMode);
+
+  // Apply type — CLEAR old type first so stale currentType never bleeds in
+  currentType = null;
+  document.querySelectorAll('.ptype').forEach(b => b.classList.remove('on'));
+  if (resolvedType && document.querySelector(`.ptype[data-type="${resolvedType}"]`)) {
+    document.querySelector(`.ptype[data-type="${resolvedType}"]`).classList.add('on');
+    currentType = resolvedType;
+  }
+
+  // Apply length
+  currentLen = autoLen;
+  document.querySelectorAll('.rlen').forEach(b => b.classList.toggle('on', b.dataset.len === autoLen));
+
+  // Show inline confirmation banner
+  const modeLabels = {save:'⚡ Save tokens', balanced:'⚖ Balanced', quality:'✦ Max quality'};
+  const announce = document.getElementById('autoAnnounce');
+  if (announce) {
+    announce.innerHTML = `✦ <b>${modeLabels[autoMode]}</b> · type: <b>${resolvedType||'general'}</b> · reply: <b>${autoLen}</b>`;
+    announce.classList.add('show');
+    setTimeout(() => announce.classList.remove('show'), 5000);
+  }
 }
 
 function showNoPromptScreen() {
