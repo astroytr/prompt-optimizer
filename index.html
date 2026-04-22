@@ -886,6 +886,62 @@ const SPELL = {
   repositry:'repository',documenation:'documentation',dependancy:'dependency',
   authentcation:'authentication',configuation:'configuration',
   asyncronous:'asynchronous',paramter:'parameter',interfce:'interface',
+  // casual shorthand / internet-speak not caught by codespell
+  writ:'write',
+  abot:'about',
+  boi:'boy',
+  gose:'goes',
+  spase:'space',
+  spaseee:'space',
+  ses:'sees',
+  alieen:'alien',
+  alieenn:'alien',
+  alieenns:'aliens',
+  meen:'mean',
+  nd:'and',
+  lik:'like',
+  likk:'like',
+  badlly:'badly',
+  pls:'please',
+  plsss:'please',
+  smol:'small',
+  smoll:'small',
+  wit:'with',
+  echho:'echo',
+  lazerz:'lasers',
+  explotion:'explosion',
+  explotionn:'explosion',
+  evryywhere:'everywhere',
+  funy:'funny',
+  att:'at',
+  sam:'same',
+  sammm:'same',
+  twisstty:'twisty',
+  woah:'whoa',
+  happendd:'happened',
+  happenddd:'happened',
+  butt:'but',
+  sens:'sense',
+  maybbe:'maybe',
+  maybbee:'maybe',
+  idkkkk:'idk',
+  ikk:'ik',
+  smth:'something',
+  somthinggg:'something',
+  fasttt:'fast',
+  okkkk:'ok',
+  bigg:'big',
+  biggg:'big',
+  bommm:'boom',
+  boimmm:'boom',
+  cryyy:'cry',
+  saddd:'sad',
+  funnnyyy:'funny',
+  slooowww:'slow',
+  noo:'no',
+  nooo:'no',
+  plss:'please',
+  eaat:'eat',
   performace:'performance',optimiation:'optimization',
 };
 
@@ -2387,80 +2443,59 @@ async function optimize() {
   const fileNames = attachedFiles.map(f => f.name);
   let cotSuffix = '';
   if (mode === 'quality') {
-    // Smart XML structure: only add tags when there's real separated context+instructions
-    const segments = detectPromptSegments(text);
-    const byRole = { instruction:[], context:[], constraint:[], example:[], question:[], other:[] };
-    segments.forEach(s => (byRole[s.role] || byRole.other).push(s.text));
-
-    const hasSeparateContext = byRole.context.length > 0 && byRole.instruction.length > 0;
-    const hasConstraints = byRole.constraint.length > 0;
-    const hasExamples = byRole.example.length > 0;
-
-    // Only XML-wrap if there are genuinely distinct structural sections
-    const worthXML = hasSeparateContext || hasConstraints || hasExamples;
-
-    let body = '';
-    if (worthXML && hasSeparateContext) {
-      body = `<context>\n${byRole.context.join(' ')}\n</context>\n\n<instructions>\n${[...byRole.instruction, ...byRole.question, ...byRole.other].join(' ')}\n</instructions>`;
-      if (hasConstraints) body += `\n\n<constraints>\n${byRole.constraint.join('. ')}\n</constraints>`;
-      if (hasExamples)    body += `\n\n<example>\n${byRole.example.join(' ')}\n</example>`;
-      if (fileNames.length) body += `\n\n<files>\n${fileNames.map(n=>`  <file>${n}</file>`).join('\n')}\n</files>`;
-      text = body;
-      changes.push({tag:'rewritten', msg:'XML structured: <context>, <instructions>' + (hasConstraints?', <constraints>':'') + '.'});
-    } else if (worthXML && hasConstraints) {
-      // Has constraints but no separate context — just wrap instructions + constraints
-      body = `<instructions>\n${text}\n</instructions>\n\n<constraints>\n${byRole.constraint.join('. ')}\n</constraints>`;
-      if (fileNames.length) body += `\n\n<files>\n${fileNames.map(n=>`  <file>${n}</file>`).join('\n')}\n</files>`;
-      text = body;
-      changes.push({tag:'rewritten', msg:'XML structured: <instructions>, <constraints>.'});
-    } else {
-      // Single-section prompt: don't XML-wrap, just append files
-      if (fileNames.length) text += '\n\nAttached: ' + fileNames.join(', ');
-    }
-
     const lower2 = text.toLowerCase();
     if (/\b(debug|fix|calculate|solve|plan|analyze|code|implement)\b/.test(lower2)) {
       cotSuffix = '\n\nThink step by step inside <thinking> tags, then give your final answer.';
       changes.push({tag:'added', msg:'Chain-of-thought added.'});
     }
-  } else if (fileNames.length) {
-    text += '\n\nAttached: ' + fileNames.join(', ');
   }
 
-  const final = (prefix + text + typeSuffix + lenSuffix + cotSuffix).trim();
-
-  // ── ML pass ──
+  // ── Deep pass runs on clean text BEFORE XML wrapping ──
+  // This prevents Deep regex from mangling XML tags
+  let deepText = text; // text at this point is post-compression, pre-XML
   if (mlEnabled && mlPipeline) {
-    setBtnLoading(88, 'ML compressing…');
-    await new Promise(r => setTimeout(r, 0)); // yield so step label paints
-    let mlPct = 88;
-    const mlTicker = setInterval(() => {
-      if (mlPct < 97) { mlPct = Math.min(97, mlPct + 0.4); setBtnLoading(Math.round(mlPct), 'ML compressing…'); }
-    }, 100);
-
-    const mlPromise = new Promise((resolve) => {
-      setTimeout(() => { runML(final, raw).then(resolve).catch(() => resolve(null)); }, 0);
-    });
-
-    mlPromise.then(mlResult => {
-      clearInterval(mlTicker);
-      updateCountdownStep('meaning check…');
-      stopCountdown();
-      if (mlResult && estTok(mlResult) < estTok(final)) {
-        const mlChanges = [...changes, {tag:'rewritten', msg:`ML rewritten — saved ~${estTok(final)-estTok(mlResult)} more tok ✓`}];
-        _lastRunUsedML = true;
-        goto_output(raw, mlResult, mlChanges, spellFixes, replyLen, mode, type, detectedIntent);
-      } else {
-        goto_output(raw, final, changes, spellFixes, replyLen, mode, type, detectedIntent);
-      }
-      resetBtn('✦ ML Optimize');
-    });
-    return;
+    setBtnLoading(88, 'deep compressing…');
+    await new Promise(r => setTimeout(r, 0));
+    const deepResult = await runML(deepText, raw).catch(() => null);
+    if (deepResult && estTok(deepResult) < estTok(deepText)) {
+      const saved = estTok(deepText) - estTok(deepResult);
+      changes.push({tag:'rewritten', msg:`Deep compression — saved ~${saved} more tok ✓`});
+      _lastRunUsedML = true;
+      text = deepResult; // use deep result for XML wrapping below
+    }
   }
+
+  // ── XML wrapping for quality mode (after Deep, on clean text) ──
+  let xmlText = text;
+  if (mode === 'quality') {
+    const segments2 = detectPromptSegments(text);
+    const byRole2 = { instruction:[], context:[], constraint:[], example:[], question:[], other:[] };
+    segments2.forEach(s => (byRole2[s.role] || byRole2.other).push(s.text));
+    const hasSepCtx2 = byRole2.context.length > 0 && byRole2.instruction.length > 0;
+    const hasConstr2 = byRole2.constraint.length > 0;
+    const hasEx2     = byRole2.example.length > 0;
+    const worthXML2  = hasSepCtx2 || hasConstr2 || hasEx2;
+    let body2 = '';
+    if (worthXML2 && hasSepCtx2) {
+      body2 = `<context>\n${byRole2.context.join(' ')}\n</context>\n\n<instructions>\n${[...byRole2.instruction, ...byRole2.question, ...byRole2.other].join(' ')}\n</instructions>`;
+      if (hasConstr2) body2 += `\n\n<constraints>\n${byRole2.constraint.join('. ')}\n</constraints>`;
+      if (hasEx2)     body2 += `\n\n<example>\n${byRole2.example.join(' ')}\n</example>`;
+      xmlText = body2;
+    } else if (worthXML2 && hasConstr2) {
+      body2 = `<instructions>\n${text}\n</instructions>\n\n<constraints>\n${byRole2.constraint.join('. ')}\n</constraints>`;
+      xmlText = body2;
+    }
+    // fileNames appended after XML
+    if (fileNames.length) xmlText += '\n\nAttached: ' + fileNames.join(', ');
+  } else if (fileNames.length) {
+    xmlText += '\n\nAttached: ' + fileNames.join(', ');
+  }
+
+  const final = (prefix + xmlText + typeSuffix + lenSuffix + cotSuffix).trim();
 
   stopCountdown();
   goto_output(raw, final, changes, spellFixes, replyLen, mode, type, detectedIntent);
-  resetBtn(mlEnabled ? '✦ ML Optimize' : '→ Optimize Prompt');
+  resetBtn(mlEnabled ? '✦ Deep Optimize' : '→ Optimize Prompt');
 }
 
 function goto_output(raw, final, changes, spellFixes, replyLen, mode, type, detectedIntent) {
@@ -3333,15 +3368,24 @@ const _DOMAIN_NOUNS_RE = /\b(gravel|tarmac|asphalt|concrete|dirt|mud|sand|snow|i
 
 function extractMeaningAnchors(text) {
   const anchors = new Set();
+  // Numbers with units
   (text.match(/\b\d[\d.,]*(?:km|mph|fps|px|ms|kb|mb|gb|%|hz)?\b/gi)||[]).forEach(n=>anchors.add(n.trim().toLowerCase()));
-  // Only match proper quotes (preceded by space/start, not apostrophes inside contractions)
-  (text.match(/(?:^|[\s(])([""`])([^""`]{2,40})\1/g)||[]).forEach(q=>anchors.add(q.replace(/[""`]/g,'').trim().toLowerCase()));
-  (text.match(/\b[A-Z][a-z]{2,}\b/g)||[]).forEach(w=>anchors.add(w.toLowerCase()));
+  // Quoted phrases
+  (text.match(/(?:^|[\s(])([""\`])([^""\`]{2,40})\1/g)||[]).forEach(q=>anchors.add(q.replace(/[""\`]/g,'').trim().toLowerCase()));
+  // Proper nouns — skip words with 3+ repeated chars (exaggeration noise)
+  (text.match(/\b[A-Z][a-z]{2,}\b/g)||[])
+    .filter(w => !/([a-zA-Z])\1{2,}/.test(w))
+    .forEach(w=>anchors.add(w.toLowerCase()));
+  // Acronyms
   (text.match(/\b[A-Z]{2,8}\b/g)||[]).forEach(w=>anchors.add(w.toLowerCase()));
-  // Only hyphenated compounds, not apostrophe contractions
+  // Hyphenated compounds
   (text.match(/\b[a-zA-Z]{2,}[-_][a-zA-Z]{2,}\b/g)||[]).forEach(w=>anchors.add(w.toLowerCase()));
+  // Domain nouns
   (text.match(_DOMAIN_NOUNS_RE)||[]).forEach(w=>anchors.add(w.toLowerCase()));
+  // File references
   (text.match(/\b\w+\.(js|ts|py|css|html|json|md|txt|jsx|tsx|vue|rb|go|rs|cpp|sql|sh|yaml)\b/gi)||[]).forEach(id=>anchors.add(id.toLowerCase()));
+  // Purge garbage: repeated-char words and very short entries
+  anchors.forEach(a => { if (/([a-z])\1{2,}/.test(a) || a.length < 3) anchors.delete(a); });
   return anchors;
 }
 
