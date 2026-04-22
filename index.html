@@ -1657,77 +1657,76 @@ function classifyPromptIntent(text) {
 //  - Explanatory connectives: MODERATE compression
 // ═══════════════════════════════════════════════════════════════════
 function budgetController(text, intent, targetRatio) {
-  // Split into sentences
-  const sents = text.split(/([.!?]+)\s*/).reduce((acc, part, i, arr) => {
+  // Split into sentences preserving punctuation
+  const rawSents = text.split(/([.!?]+)\s*/).reduce((acc, part, i, arr) => {
     if (i % 2 === 0 && part.trim()) {
       acc.push({ text: part.trim(), punct: arr[i+1] || '.', index: acc.length });
     }
     return acc;
   }, []);
 
-  if (sents.length === 0) return text;
+  if (rawSents.length === 0) return text;
 
-  // Score each sentence for importance
-  const scored = sents.map(s => {
-    let score = 5; // baseline
-    const st = s.text.toLowerCase();
+  const STOP_KW = new Set(['the','and','for','are','but','not','you','all','can','had','was','get','has','how','too','use','they','this','that','with','have','from','will','your','been','more','also','than','then','them','some','what','when','which','about','their','these','would','could','should','a','an','it','is','in','of','to','do','be','by','at','or','so','just','very','really','quite','please']);
+  function kw(s) { return new Set((s.toLowerCase().match(/\b[a-z]{3,}\b/g)||[]).filter(w=>!STOP_KW.has(w))); }
 
-    // Task sentence (first): always keep
-    if (s.index === 0) score += 10;
-
-    // Contains action verb → important
-    if (/^(write|create|build|fix|debug|explain|analyze|summarize|generate|implement|design|list|compare|find|give|show|make)\b/i.test(s.text)) score += 8;
-
-    // Contains named entities → important
-    if (/\b[A-Z][a-z]{2,}\b/.test(s.text)) score += 4;
-
-    // Contains numbers/measurements → important
-    if (/\b\d[\d.,]*/.test(s.text)) score += 4;
-
-    // Contains domain-specific terms → important
-    if (intent.domain !== 'general') {
-      const domainCheck = {
-        code:    /\b(function|api|error|variable|class|method|return|async|await)\b/,
-        gamedev: /\b(physics|collision|velocity|grip|drift|torque|suspension|tire|wheel|steering)\b/,
-        writing: /\b(tone|audience|style|voice|length|format|paragraph)\b/,
-        data:    /\b(column|row|schema|query|index|type|null|field)\b/,
-      };
-      if (domainCheck[intent.domain]?.test(st)) score += 5;
-    }
-
-    // Constraint sentence ("make sure", "must", "don't", "only") → very important
-    if (/\b(must|don't|only|never|always|make sure|ensure|require|not|no )\b/.test(st)) score += 6;
-
-    // Pure filler sentence → low score
-    if (/^(so,?|well,?|basically,?|honestly,?|i mean,?|you know,?)/.test(st)) score -= 8;
-    if (/^(thanks|thank you|hi|hello|hey)\b/.test(st)) score -= 10;
-
-    // Repetition of previous sentence content → low score
-    return { ...s, score };
-  });
-
-  // Sort by score descending, keep top sentences up to target token budget
-  const totalTok = estTok(text);
-  const budget = Math.round(totalTok * (1 - targetRatio + 0.3)); // keep at least 70% even at max compression
-  const sorted = [...scored].sort((a,b) => b.score - a.score);
-
-  let kept = new Set();
-  let tokCount = 0;
-  for (const s of sorted) {
-    const st = estTok(s.text);
-    if (tokCount + st <= budget || s.score >= 13) { // always keep critical sentences
-      kept.add(s.index);
-      tokCount += st;
-    }
+  // Score sentence importance
+  function scoreSentence(s, idx) {
+    let score = 5;
+    const st = s.toLowerCase();
+    if (idx === 0) score += 15;
+    if (/^(write|create|build|fix|debug|explain|analyze|summarize|generate|implement|design|list|compare|find|give|show|make|add|refactor|convert|translate)\b/i.test(s)) score += 10;
+    if (/\b[A-Z][a-z]{2,}\b/.test(s)) score += 4;
+    if (/\b\d[\d.,]*/.test(s)) score += 4;
+    if (/\b(must|don't|only|never|always|make sure|ensure|require|without|avoid|no )\b/.test(st)) score += 8;
+    if (/\b(function|api|class|error|variable|method|physics|collision|velocity|tone|audience|format|schema|query)\b/.test(st)) score += 4;
+    if (/^(so[,.]?|well[,.]?|basically[,.]?|honestly[,.]?|i mean[,.]?|you know[,.]?)\s*$/.test(st)) score -= 15;
+    if (/^(thanks|thank you|hi|hello|hey|ok|okay)\b/.test(st)) score -= 15;
+    if (/^(i was wondering|could you|would you mind|i'd like you to)\b/i.test(s)) score -= 5;
+    return score;
   }
 
-  // Rebuild in original order
-  const result = scored
-    .filter(s => kept.has(s.index))
-    .map(s => s.text + (s.punct || '.'))
-    .join(' ');
+  // Compress within a sentence — strip verbose phrases, keep all meaning
+  function compressSentence(s, score) {
+    if (score >= 13) return s;
+    let out = s;
+    out = out.replace(/^(i was wondering if you (could|can|would) (help me )?(to )?)/i,'');
+    out = out.replace(/^(could you please |would you mind |can you please |please )/i,'');
+    out = out.replace(/^(i('d| would) like you to |i need you to |i want you to )/i,'');
+    out = out.replace(/\b(in order to)\b/gi,'to');
+    out = out.replace(/\b(due to the fact that)\b/gi,'because');
+    out = out.replace(/\b(as a result of)\b/gi,'from');
+    out = out.replace(/\b(with regard to|with respect to|in terms of)\b/gi,'for');
+    out = out.replace(/\b(the reason (?:for this )?is (?:that )?)\b/gi,'because ');
+    out = out.replace(/\b(in (?:a|the) (?:very )?(?:similar|same) (?:way|manner|fashion))\b/gi,'similarly');
+    out = out.replace(/\b(a (?:wide |large )?(?:variety|number|range) of)\b/gi,'many');
+    out = out.replace(/\b(at (?:this|the current) (?:point in time|moment|time))\b/gi,'now');
+    out = out.replace(/\b(each and every)\b/gi,'every');
+    out = out.replace(/\b(first and foremost)\b/gi,'first');
+    out = out.replace(/[,.]?\s*(if that makes sense|does that make sense|if you know what i mean|you know what i mean)\.?\s*$/i,'');
+    out = out.replace(/[,.]?\s*(and make it (really |very |super )?(good|great|nice|clean|solid|polished))\.?\s*$/i,'');
+    out = out.replace(/\s{2,}/g,' ').trim();
+    if (out.length > 0) out = out.charAt(0).toUpperCase() + out.slice(1);
+    return out || s;
+  }
 
-  return result;
+  const scored = rawSents.map((s,i) => ({ ...s, score: scoreSentence(s.text, i) }));
+  const compressed = scored.map(s => ({ ...s, text: compressSentence(s.text, s.score) }));
+
+  // Drop only pure filler or near-duplicate low-scoring sentences
+  const kept = [];
+  for (const s of compressed) {
+    if (s.score <= -5) continue; // pure filler
+    const dup = kept.some(prev => {
+      const ki = kw(s.text), kp = kw(prev.text);
+      if (!ki.size || !kp.size) return false;
+      return [...ki].filter(w=>kp.has(w)).length / Math.min(ki.size,kp.size) > 0.75 && s.score < 10;
+    });
+    if (!dup) kept.push(s);
+  }
+
+  if (kept.length === 0) return text;
+  return kept.map(s => s.text + (s.punct||'.')).join(' ');
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1759,19 +1758,54 @@ function detectPromptSegments(text) {
 }
 
 function rebuildOptimalStructure(segments, mode) {
-  if (mode === 'save') return null; // save mode: don't restructure, just compress
-  // Group by role
+  if (mode === 'save') return null;
+
   const byRole = { instruction:[], context:[], constraint:[], example:[], question:[], other:[] };
   segments.forEach(s => (byRole[s.role] || byRole.other).push(s.text));
 
-  // Optimal order for Claude: instruction first, context, constraints, examples
+  // Deduplicate near-identical segments within each group using keyword overlap
+  const STOP = new Set(['the','and','for','are','but','not','you','all','can','had','was','get','has','how','too','use','they','this','that','with','have','from','will','your','been','more','also','than','then','them','some','what','when','which','about','their','these','would','could','should','a','an','it','is','in','of','to','do','be','by','at','or']);
+  function keywords(s) { return new Set((s.toLowerCase().match(/\b[a-z]{3,}\b/g)||[]).filter(w=>!STOP.has(w))); }
+  function mergeGroup(group) {
+    if (group.length <= 1) return group;
+    const out = [group[0]];
+    for (let i = 1; i < group.length; i++) {
+      const ki = keywords(group[i]);
+      const dup = out.some(prev => {
+        const kp = keywords(prev);
+        if (!ki.size || !kp.size) return false;
+        return [...ki].filter(w=>kp.has(w)).length / Math.min(ki.size,kp.size) > 0.6;
+      });
+      if (!dup) out.push(group[i]);
+    }
+    return out;
+  }
+
+  // Telegraph-compress constraint sentences — strip meta-commentary, keep the rule
+  function compressConstraints(cs) {
+    return cs.map(c => c
+      .replace(/\bmake sure (?:that |to )?/gi,'')
+      .replace(/\byou (must|should|need to|have to)\b/gi,'$1')
+      .replace(/\bit (must|should|needs to|has to)\b/gi,'$1')
+      .replace(/\bplease (?:make sure|ensure|remember to) ?/gi,'')
+      .replace(/\bin order to\b/gi,'to')
+      .replace(/\bthe (\w+) (must|should|needs to)\b/gi,'$1 $2')
+      .replace(/\s{2,}/g,' ').trim()
+    );
+  }
+
   const parts = [];
-  if (byRole.instruction.length) parts.push(byRole.instruction.join(' '));
-  if (byRole.context.length)     parts.push(byRole.context.join(' '));
-  if (byRole.constraint.length)  parts.push(byRole.constraint.join('. '));
-  if (byRole.example.length)     parts.push(byRole.example.join(' '));
-  if (byRole.question.length)    parts.push(byRole.question.join(' '));
-  if (byRole.other.length)       parts.push(byRole.other.join(' '));
+  const instr   = mergeGroup(byRole.instruction);
+  const ctx     = mergeGroup(byRole.context);
+  const constr  = compressConstraints(mergeGroup(byRole.constraint));
+  const other   = mergeGroup(byRole.other);
+
+  if (instr.length)         parts.push(instr.join(' '));
+  if (ctx.length)           parts.push(ctx.join(' '));
+  if (constr.length)        parts.push(constr.join('. '));
+  if (byRole.example.length) parts.push(byRole.example.join(' '));
+  if (byRole.question.length) parts.push(byRole.question.join(' '));
+  if (other.length)         parts.push(other.join(' '));
 
   return parts.filter(Boolean).join('\n\n').trim();
 }
@@ -2273,18 +2307,20 @@ async function optimize() {
   text = text.charAt(0).toUpperCase() + text.slice(1);
 
   setBtnLoading(78, 'restructuring…');
-  // ── Structure-aware rewrite (balanced + quality) ──
-  if ((mode === 'balanced' || mode === 'quality') && detectedIntent && detectedIntent.isMultiSentence) {
+  // ── Structure-aware rewrite — all modes for multi-sentence prompts ──
+  if (detectedIntent && detectedIntent.isMultiSentence) {
     const segments = detectPromptSegments(text);
-    const restructured = rebuildOptimalStructure(segments, mode);
     const structAnchors = extractMeaningAnchors(text);
+    const restructureMode = mode === 'save' ? 'balanced' : mode;
+    const restructured = rebuildOptimalStructure(segments, restructureMode);
     if (restructured && restructured !== text && verifyMeaningPreserved(text, restructured, structAnchors)) {
-      const hasReorder = segments.some((s,i,arr) => {
-        if (i === 0) return false;
-        return arr[i].role === 'instruction' && arr[i-1].role !== 'instruction';
-      });
-      if (hasReorder) {
-        text = restructured;
+      const tokBefore = estTok(text);
+      const tokAfter  = estTok(restructured);
+      text = restructured;
+      const saving = tokBefore - tokAfter;
+      if (mode === 'save') {
+        changes.push({tag:'rewritten', msg:`Restructured + deduped${saving>0?' — ~'+saving+' tok saved':''}.`});
+      } else {
         changes.push({tag:'rewritten', msg:'Restructured: instruction → context → constraints.'});
       }
     }
@@ -2351,28 +2387,36 @@ async function optimize() {
   const fileNames = attachedFiles.map(f => f.name);
   let cotSuffix = '';
   if (mode === 'quality') {
-    // Use segment detector to build smarter XML structure
+    // Smart XML structure: only add tags when there's real separated context+instructions
     const segments = detectPromptSegments(text);
     const byRole = { instruction:[], context:[], constraint:[], example:[], question:[], other:[] };
     segments.forEach(s => (byRole[s.role] || byRole.other).push(s.text));
 
-    let body = '';
     const hasSeparateContext = byRole.context.length > 0 && byRole.instruction.length > 0;
+    const hasConstraints = byRole.constraint.length > 0;
+    const hasExamples = byRole.example.length > 0;
 
-    if (hasSeparateContext) {
+    // Only XML-wrap if there are genuinely distinct structural sections
+    const worthXML = hasSeparateContext || hasConstraints || hasExamples;
+
+    let body = '';
+    if (worthXML && hasSeparateContext) {
       body = `<context>\n${byRole.context.join(' ')}\n</context>\n\n<instructions>\n${[...byRole.instruction, ...byRole.question, ...byRole.other].join(' ')}\n</instructions>`;
-      if (byRole.constraint.length) body += `\n\n<constraints>\n${byRole.constraint.join('. ')}\n</constraints>`;
-      if (byRole.example.length) body += `\n\n<example>\n${byRole.example.join(' ')}\n</example>`;
+      if (hasConstraints) body += `\n\n<constraints>\n${byRole.constraint.join('. ')}\n</constraints>`;
+      if (hasExamples)    body += `\n\n<example>\n${byRole.example.join(' ')}\n</example>`;
+      if (fileNames.length) body += `\n\n<files>\n${fileNames.map(n=>`  <file>${n}</file>`).join('\n')}\n</files>`;
+      text = body;
+      changes.push({tag:'rewritten', msg:'XML structured: <context>, <instructions>' + (hasConstraints?', <constraints>':'') + '.'});
+    } else if (worthXML && hasConstraints) {
+      // Has constraints but no separate context — just wrap instructions + constraints
+      body = `<instructions>\n${text}\n</instructions>\n\n<constraints>\n${byRole.constraint.join('. ')}\n</constraints>`;
+      if (fileNames.length) body += `\n\n<files>\n${fileNames.map(n=>`  <file>${n}</file>`).join('\n')}\n</files>`;
+      text = body;
+      changes.push({tag:'rewritten', msg:'XML structured: <instructions>, <constraints>.'});
     } else {
-      // Fallback: simple split
-      const parts = text.split(/([.!?]+)\s+/).filter((_,i)=>i%2===0).filter(s=>s.trim().length>3);
-      body = parts.length >= 4
-        ? `<context>\n${parts.slice(0,Math.ceil(parts.length/2)).join(' ').trim()}\n</context>\n\n<instructions>\n${parts.slice(Math.ceil(parts.length/2)).join(' ').trim()}\n</instructions>`
-        : `<instructions>\n${text}\n</instructions>`;
+      // Single-section prompt: don't XML-wrap, just append files
+      if (fileNames.length) text += '\n\nAttached: ' + fileNames.join(', ');
     }
-    if (fileNames.length) body += `\n\n<files>\n${fileNames.map(n=>`  <file>${n}</file>`).join('\n')}\n</files>`;
-    text = body;
-    changes.push({tag:'rewritten', msg:'XML structured using intent-detected segments (<context>, <instructions>, <constraints>).'});
 
     const lower2 = text.toLowerCase();
     if (/\b(debug|fix|calculate|solve|plan|analyze|code|implement)\b/.test(lower2)) {
@@ -3166,27 +3210,23 @@ function undoOptimize() {
 // ═══════════════════════════════════════════
 
 // ═══════════════════════════════════════════
-//  ML MODE — Transformers.js T5-small (runs in browser, ~60MB first load)
+//  DEEP MODE — Offline semantic compression
+//  Two-pass: clause-level structural rewrite + anchor-verified output
 // ═══════════════════════════════════════════
 let mlEnabled = false;
 let mlLoading = false;
-let mlPipeline = null; // kept for compatibility checks
+let mlPipeline = null; // kept for compatibility
 
-// DEEP COMPRESSION patterns — structural rewrites the main FILLERS pass doesn't cover
+// DEEP_PASS: structural rewrites the main FILLERS pass doesn't cover
 const DEEP_PASS = [
-  // Passive → active
-  [/\bthere should be\s+/gi,'add '],
-  [/\bthere should be a\s+/gi,'add '],
+  [/\bthere should be a?\s+/gi,'add '],
   [/\bit needs to have\s+/gi,'needs '],
-  [/\bthe game should\s+/gi,'game '],
-  [/\bthe code should\s+/gi,'code '],
-  [/\bthe whole thing\s+/gi,''],
+  [/\bthe (game|code|app|system) should\s+/gi,'$1 '],
+  [/\bthe whole (game|thing|app)\s+/gi,''],
   [/\bthe server side should be\s+/gi,'server: '],
-  [/\bthe game itself is\s+/gi,''],
-  [/\bthe whole game should\s+/gi,'game '],
   [/\bwhen the game ends\s*/gi,'on game end'],
-  [/\bwhen someone reaches (\d+) kills\b/gi,'at $1 kills'],
   [/\bwhen you die\b/gi,'on death'],
+  [/\bwhen someone reaches (\d+) kills\b/gi,'at $1 kills'],
   [/\bplayers can create a room and share a code and other players can join using that code\b/gi,'room code join system'],
   [/\bplayers can type messages to each other before (?:the )?game starts\b/gi,'pre-game chat'],
   [/\badd some sound effects too\b/gi,'sound effects:'],
@@ -3203,18 +3243,57 @@ const DEEP_PASS = [
   [/\s{2,}/g,' '],
 ];
 
+// ── Clause-level merger: splits on "and", "also", "plus", merges near-duplicate clauses ──
+function mergeRedundantClauses(text) {
+  // Split into independent clauses at conjunctions — only for longish prompts
+  if (estTok(text) < 20) return text;
+  const STOP = new Set(['the','and','for','are','but','not','you','all','can','had','was','get','has','how','too','use','they','this','that','with','have','from','will','your','been','more','also','than','then','them','some','what','when','which','about','their','these','would','could','should','a','an','it','is','in','of','to','do','be','by','at','or']);
+  const kw = s => new Set((s.toLowerCase().match(/\b[a-z]{3,}\b/g)||[]).filter(w=>!STOP.has(w)));
+  // Split on sentence boundaries
+  const sentences = text.split(/([.!?]+)\s+/).reduce((acc,p,i,arr) => {
+    if (i%2===0 && p.trim()) acc.push({t:p.trim(), sep:(arr[i+1]||'.')});
+    return acc;
+  }, []);
+  if (sentences.length < 3) return text;
+  const kept = [sentences[0]];
+  for (let i = 1; i < sentences.length; i++) {
+    const ki = kw(sentences[i].t);
+    const dup = kept.some(prev => {
+      const kp = kw(prev.t);
+      if (!ki.size || !kp.size) return false;
+      const overlap = [...ki].filter(w=>kp.has(w)).length;
+      return overlap / Math.min(ki.size,kp.size) > 0.65;
+    });
+    if (!dup) kept.push(sentences[i]);
+  }
+  return kept.map(s=>s.t+s.sep).join(' ');
+}
+
 function runDeepPass(text, original) {
-  let out = text;
+  // Pass 1: clause deduplication
+  let out = mergeRedundantClauses(text);
+
+  // Pass 2: structural regex patterns
   DEEP_PASS.forEach(([r,v]) => { out = out.replace(r, v); });
   out = out.replace(/\s{2,}/g,' ').replace(/[,.\s]+$/, '').trim();
 
-  // Verify nothing critical was dropped
+  // Pass 3: segment restructure on deep result
+  const intent = classifyPromptIntent(out);
+  if (intent.isMultiSentence) {
+    const segs = detectPromptSegments(out);
+    const rebuilt = rebuildOptimalStructure(segs, 'balanced');
+    if (rebuilt && rebuilt !== out && verifyMeaningPreserved(out, rebuilt, extractMeaningAnchors(original))) {
+      out = rebuilt;
+    }
+  }
+
+  // Verify anchor words preserved against original input
   const anchors = extractMeaningAnchors(original);
   const outLower = out.toLowerCase();
   let missing = 0;
   anchors.forEach(a => { const s=a.slice(0,Math.max(4,a.length-2)); if(s.length>=3&&!outLower.includes(s)) missing++; });
   if (missing > Math.ceil(anchors.size * 0.20)) {
-    dbg('Deep pass: anchor check failed ('+missing+'/'+anchors.size+' missing), kept original');
+    dbg('Deep pass: anchor check failed ('+missing+'/'+anchors.size+' missing), kept pre-deep result');
     return null;
   }
   return estTok(out) < estTok(text) ? out : null;
@@ -3233,11 +3312,11 @@ function toggleML(){
     document.getElementById('runBtn').querySelector('.btn-default').textContent='→ Optimize Prompt';
     return;
   }
-  mlEnabled=true; mlPipeline=true; // flag only
+  mlEnabled=true; mlPipeline=true;
   btn.textContent='✦ Deep on'; btn.style.background='var(--accent)'; btn.style.color='#0e0e0f'; btn.style.boxShadow='0 0 14px rgba(200,240,96,.4)';
   status.textContent='✓ ready'; status.style.color='var(--accent)';
   document.getElementById('runBtn').querySelector('.btn-default').textContent='✦ Deep Optimize';
-  dbg('Deep compression: enabled');
+  dbg('Deep compression: enabled (offline, 3-pass)');
 }
 
 async function runML(text, original) {
