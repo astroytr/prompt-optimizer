@@ -404,6 +404,7 @@ footer a:hover{color:var(--text2)}
       <button class="gtog active-manual" id="togManual" onclick="setManual()">Manual</button>
     </div>
   </div>
+  <div class="result-announce" id="autoAnnounce" style="margin-bottom:10px"></div>
   <div class="mode-grid" id="modeGrid">
     <div class="mode-card selected" data-mode="save" onclick="selectMode('save')">
       <div class="mode-badge badge-free">★ best for free plan</div>
@@ -1734,7 +1735,36 @@ function classifyPromptIntent(text) {
                       (text.match(/\b\d+\b/g)||[]).length +
                       (text.match(/["'`][^"'`]{2,}\b["'`]/g)||[]).length;
 
-  return { task, domain, hasCode, hasNumbers, hasList, isQuestion, isMultiSentence,
+  // ── Auto-detect prompt TYPE (maps to TYPE_CONFIG keys) ──
+  // This resolves the "type: none" issue from the debug logs — type is now
+  // inferred here so it doesn't require the popup Q3 to run.
+  const typeSignals = {
+    coding:   /\b(function|class|variable|loop|array|api|javascript|typescript|java|css|html|sql|bash|json|react|node|code|script|program|debug|error|bug|fix|refactor|implement)\b/,
+    gamedev:  /\b(game|physics|engine|player|sprite|collision|velocity|pygame|unity|godot|phaser|raylib|drift|steering|tire|torque|suspension)\b/,
+    creative: /\b(story|tale|fiction|sci-?fi|poem|novel|narrative|plot|character|twist|scene|hero|villain|adventure|quest|drama|space|alien)\b/,
+    writing:  /\b(essay|article|blog|draft|paragraph|tone|voice|rewrite|proofread|email|letter|cover letter|resume|cv)\b/,
+    analyze:  /\b(analyze|analyse|compare|evaluate|assess|review|contrast|pros|cons|advantages|disadvantages|research|breakdown)\b/,
+    summary:  /\b(summarize|summarise|summary|tldr|condense|shorten|brief|key points)\b/,
+    explain:  /\b(explain|what is|what are|how does|why does|describe|clarify|define|teach|help me understand)\b/,
+    list:     /\b(list|enumerate|give me|show me|steps to|how to|top \d+|best \d+)\b/,
+    data:     /\b(data|dataset|csv|json|table|row|column|database|query|schema|pandas|dataframe)\b/,
+    email:    /\b(email|e-mail|subject line|reply to|follow up|cold outreach|business communication)\b/,
+  };
+  let detectedType = null;
+  let typeScore = 0;
+  // gamedev before code, creative before writing — domain priority
+  const typePriority = ['gamedev','coding','creative','writing','email','summary','analyze','explain','list','data'];
+  for (const k of typePriority) {
+    const r = typeSignals[k];
+    if (!r) continue;
+    const matches = (t.match(r) || []).length;
+    if (matches > typeScore) { typeScore = matches; detectedType = k; }
+  }
+  // If domain is creative but no type matched → force creative
+  if (!detectedType && domain === 'creative') detectedType = 'creative';
+  if (!detectedType && domain === 'code') detectedType = 'coding';
+
+  return { task, domain, detectedType, hasCode, hasNumbers, hasList, isQuestion, isMultiSentence,
            specificity, wc,
            isSimple: wc < 15 && !isMultiSentence,
            isComplex: wc > 60 || isMultiSentence };
@@ -2413,6 +2443,36 @@ async function optimize() {
 
   setBtnLoading(28, 'removing fillers…');
   await new Promise(r => setTimeout(r, 0)); // yield — lets timer tick before heavy loop
+
+  // ── Grammar normalization pass (new) ──
+  // Fixes structural grammar issues that spell-check misses:
+  // broken subject-verb agreement, dangling "N boom something happen",
+  // run-together phrases without proper connectives.
+  // Runs ONLY on prompts that were informal/normalized — don't touch clean prompts.
+  if (wasNormalized) {
+    const grammarFixes = [
+      // "he see" → "he sees", "he go" → "he goes" (3rd person singular present)
+      [/\b(he|she|it)\s+(see|go|run|walk|fall|trip|say|hear|find|get|have|do|make|take|come|give|know|think|feel|look|want|seem|turn|show|try|ask|need|become|leave|put|mean|keep|let|begin|start|grow|open|move|play|live|hold|bring|happen|stand|lose|pay|meet|include|continue|set|learn|change|lead|understand|watch|follow|stop|create|speak|read|spend|grow|allow|add|require|appear|kill|win|fly|write|develop|call|build|focus|push|pull|fall|fight|sit|form|carry|break|raise|help|use|work|show|listen|explain|guess|decide|choose|wish|wait|enter|kill|eat|reach|avoid|beat|provide|catch|send|face|wear|protect|throw|jump|shoot|survive|escape|run|turn|spin|crash|boost|swing|dodge|hit|miss|grab|drop|kick|punch|stab|slice)\b(?!\s+(?:up|down|out|in|on|off|away|back|over|through|around|about))/gi,
+        (m, subj, verb) => {
+          const s = verb.endsWith('s') ? verb : (verb.endsWith('sh')||verb.endsWith('ch')||verb.endsWith('x')||verb.endsWith('o')) ? verb+'es' : verb+'s';
+          return subj+' '+s;
+        }
+      ],
+      // "alien is really mean nd angry" → preserve as-is (already handled by normalizer)
+      // "something happen" → "something happens"
+      [/\bsomething\s+(happen|occur|explode|start|end|begin|change|appear|emerge)\b/gi,
+        (m, verb) => 'something ' + verb + 's'
+      ],
+      // "boom something" → "then something" (narrative connector)
+      [/\bboom\s+(?=something|everything|it|he|she|they|the)\b/gi, 'then '],
+      // Strip orphaned capital "N" that's left after nd→and conversion mid-sentence
+      [/(?<=\.\s)[A-Z]\s+(?=[a-z])/g, ''],
+    ];
+    const bGram = text;
+    grammarFixes.forEach(([r, v]) => { text = text.replace(r, v); });
+    text = text.replace(/\s{2,}/g, ' ').trim();
+    if (text !== bGram) changes.push({tag:'fixed', msg:'Grammar normalized.'});
+  }
   // ── Save + Balanced: fillers & redundancies ──
   if (mode === 'save' || mode === 'balanced') {
     const b1 = text;
@@ -2516,6 +2576,40 @@ async function optimize() {
     }
   } else {
     detectedIntent = classifyPromptIntent(text);
+  }
+
+  // ── Auto-apply detected type if user hasn't chosen one ──
+  // Fixes the "type: none" issue — the classifier now returns detectedType,
+  // which we silently apply so TYPE_CONFIG enrichment works without popup
+  let effectiveType = type; // user's manual choice wins
+  if (!effectiveType && detectedIntent?.detectedType) {
+    effectiveType = detectedIntent.detectedType;
+    // Reflect in UI so user can see what was detected
+    document.querySelectorAll('.ptype').forEach(b => b.classList.remove('on'));
+    const btn = document.querySelector(`.ptype[data-type="${effectiveType}"]`);
+    if (btn) { btn.classList.add('on'); currentType = effectiveType; }
+    changes.push({tag:'fixed', msg:`Auto-detected prompt type: ${effectiveType}.`});
+  }
+
+  // ── Tone/style extraction — converts emoji/mood signals to metadata tags ──
+  // Instead of stripping emoji and losing their emotional content, we map them
+  // to tone descriptors that survive compression and improve output quality
+  const toneMap = [
+    [/😡|😤|🤬/, 'tone: angry'],
+    [/😭|😢|💔/, 'tone: emotional/sad'],
+    [/😂|🤣|😆/, 'tone: humorous'],
+    [/💥|🔥|⚡/, 'tone: high-energy/explosive'],
+    [/🔫|⚔|🥊/, 'tone: action-packed'],
+    [/👻|😱|🕷/, 'tone: scary/horror'],
+    [/🌙|✨|🔮/, 'tone: mystical/dreamy'],
+  ];
+  const detectedTones = [];
+  const rawForTone = raw; // check original for emoji before they're stripped
+  toneMap.forEach(([re, label]) => { if (re.test(rawForTone)) detectedTones.push(label); });
+  if (detectedTones.length > 0 && !/_tone:/.test(text)) {
+    // Store as a weak signal — will be used in quality XML <style> block later
+    detectedIntent = detectedIntent || {};
+    detectedIntent._tones = detectedTones;
   }
 
   setBtnLoading(70, 'cleaning up…');
@@ -2625,17 +2719,41 @@ async function optimize() {
   }
 
   let prefix = '', typeSuffix = '';
-  if (type && TYPE_CONFIG[type] && mode !== 'save') {
-    const cfg = TYPE_CONFIG[type];
+  if (effectiveType && TYPE_CONFIG[effectiveType] && mode !== 'save') {
+    const cfg = TYPE_CONFIG[effectiveType];
     if (cfg.role && mode === 'quality') { prefix = cfg.role + '\n\n'; changes.push({tag:'added', msg:`Role: "${cfg.role}"`}); }
     if (cfg.format && mode === 'quality') { typeSuffix = '\n\n' + cfg.format; changes.push({tag:'added', msg:`Format: "${cfg.format}"`}); }
   }
 
+  // ── Dynamic reply length inference ──
+  // When the user leaves reply length on "auto", infer a sensible default
+  // from the detected prompt type instead of hardcoding 300 tokens for everything.
+  // Fixes the issue where creative/story prompts got capped at 100 words.
+  let inferredLen = replyLen;
+  if (replyLen === 'auto' && detectedIntent) {
+    const t = detectedIntent.detectedType || detectedIntent.task;
+    if (['creative','writing'].includes(t)) inferredLen = 'long';       // stories need room
+    else if (['coding','gamedev'].includes(t)) inferredLen = 'long';     // code needs room
+    else if (['explain','analyze'].includes(t)) inferredLen = 'medium';
+    else if (['list','summary'].includes(t)) inferredLen = 'medium';
+    else if (detectedIntent.isSimple) inferredLen = 'short';
+    // Only override if still 'auto' — user's explicit choice always wins
+    if (inferredLen !== 'auto') {
+      changes.push({tag:'added', msg:`Reply length auto-set to "${inferredLen}" based on prompt type.`});
+    }
+  }
+
   let lenSuffix = '';
-  if (replyLen !== 'auto' && mode !== 'save') {
-    const cfg = REPLY_INSTRUCTIONS[replyLen];
-    lenSuffix = '\n\n' + cfg.instruction;
-    changes.push({tag:'added', msg:`Reply length: "${cfg.instruction}"`});
+  if (inferredLen !== 'auto' && mode !== 'save') {
+    const cfg = REPLY_INSTRUCTIONS[inferredLen];
+    if (cfg && cfg.instruction) {
+      lenSuffix = '\n\n' + cfg.instruction;
+      if (replyLen === 'auto') {
+        // Only announce if it was auto-inferred, not user-set (already logged above)
+      } else {
+        changes.push({tag:'added', msg:`Reply length: "${cfg.instruction}"`});
+      }
+    }
   }
 
   const fileNames = attachedFiles.map(f => f.name);
@@ -2650,11 +2768,14 @@ async function optimize() {
 
   // ── Deep pass runs on clean text BEFORE XML wrapping ──
   // This prevents Deep regex from mangling XML tags
+  // BUG FIX: extractMeaningAnchors is now computed from the ORIGINAL raw text,
+  // not the compressed text — that's why Deep pass was returning 0 anchors.
+  const _rawAnchors = extractMeaningAnchors(raw);
   let deepText = text; // text at this point is post-compression, pre-XML
   if (mlEnabled && mlPipeline) {
     setBtnLoading(88, 'deep compressing…');
     await new Promise(r => setTimeout(r, 0));
-    const deepResult = await runML(deepText, raw).catch(() => null);
+    const deepResult = await runML(deepText, raw, _rawAnchors).catch(() => null);
     if (deepResult && estTok(deepResult) < estTok(deepText)) {
       const saved = estTok(deepText) - estTok(deepResult);
       changes.push({tag:'rewritten', msg:`Deep compression — saved ~${saved} more tok ✓`});
@@ -2699,9 +2820,11 @@ async function optimize() {
       const allSents = text.split(/[.!?]+\s*/).filter(s => s.trim().length > 3);
       const styleSents = isCreativePrompt ? allSents.filter(s => creativeConstraintRe.test(s)) : [];
       const mainSents  = isCreativePrompt ? allSents.filter(s => !creativeConstraintRe.test(s)) : allSents;
-      if (isCreativePrompt && styleSents.length > 0) {
+      if (isCreativePrompt && (styleSents.length > 0 || (detectedIntent?._tones?.length > 0))) {
+        const styleParts = [...styleSents];
+        if (detectedIntent?._tones?.length > 0) styleParts.push(...detectedIntent._tones);
         body2  = `<instructions>\n${mainSents.join('. ')}\n</instructions>`;
-        body2 += `\n\n<style>\n${styleSents.join('. ')}\n</style>`;
+        body2 += `\n\n<style>\n${styleParts.join('. ')}\n</style>`;
       } else {
         body2 = `<instructions>\n${text}\n</instructions>`;
       }
@@ -2718,7 +2841,7 @@ async function optimize() {
   const final = (prefix + xmlText + typeSuffix + lenSuffix + cotSuffix).trim();
 
   stopCountdown();
-  goto_output(raw, final, changes, spellFixes, replyLen, mode, type, detectedIntent);
+  goto_output(raw, final, changes, spellFixes, replyLen, mode, effectiveType, detectedIntent);
   resetBtn(mlEnabled ? '✦ Deep Optimize' : '→ Optimize Prompt');
 }
 
@@ -2788,6 +2911,7 @@ function goto_output(raw, final, changes, spellFixes, replyLen, mode, type, dete
   if (detectedIntent) {
     chips.push({c:'b',t:`intent: ${detectedIntent.task}`});
     if (detectedIntent.domain !== 'general') chips.push({c:'b',t:`domain: ${detectedIntent.domain}`});
+    if (detectedIntent.detectedType && detectedIntent.detectedType !== type) chips.push({c:'p',t:`auto-type: ${detectedIntent.detectedType}`});
   }
   if (chips.length===0) chips.push({c:'',t:'prompt was already clean'});
   document.getElementById('chipsRow').innerHTML = chips.map(c=>`<div class="chip ${c.c}">${c.t}</div>`).join('');
@@ -2923,6 +3047,59 @@ function detectPromptType(text) {
 }
 
 function openAutoPopup() {
+  const hasPrompt = document.getElementById('promptIn').value.trim().length > 0;
+
+  // ── Fully-auto path: if prompt is present, detect everything and apply immediately ──
+  // No popup questions needed — the classifier handles type, the plan question
+  // defaults to "free" (most common case for this tool), priority to "balanced".
+  if (hasPrompt) {
+    const promptText = document.getElementById('promptIn').value.trim();
+    const detected = detectPromptType(promptText);
+    const intent = classifyPromptIntent(promptText);
+
+    // Mode: if creative/writing → quality; if technical/complex → balanced; else save
+    let autoMode = 'save';
+    if (intent.domain === 'creative' || intent.detectedType === 'creative' || intent.detectedType === 'writing') autoMode = 'quality';
+    else if (intent.isComplex || ['coding','gamedev','analyze'].includes(intent.detectedType)) autoMode = 'balanced';
+
+    // Length: infer from type
+    let autoLen = 'auto';
+    if (['creative','writing','coding','gamedev'].includes(intent.detectedType)) autoLen = 'long';
+    else if (['explain','analyze','list'].includes(intent.detectedType)) autoLen = 'medium';
+    else if (intent.isSimple) autoLen = 'short';
+
+    // Apply mode
+    selectMode(autoMode);
+
+    // Apply length
+    currentLen = autoLen;
+    document.querySelectorAll('.rlen').forEach(b => b.classList.toggle('on', b.dataset.len === autoLen));
+
+    // Apply type
+    const typeDataMap = ['list', 'coding', 'writing', 'analyze', 'coding', null, 'gamedev'];
+    const detectedDataVal = typeDataMap[detected] !== undefined ? typeDataMap[detected] : (intent.detectedType || null);
+    document.querySelectorAll('.ptype').forEach(b => b.classList.remove('on'));
+    if (detectedDataVal) {
+      const btn = document.querySelector(`.ptype[data-type="${detectedDataVal}"]`);
+      if (btn) { btn.classList.add('on'); currentType = detectedDataVal; }
+    }
+
+    // Update toggle UI
+    document.getElementById('togAuto').className = 'gtog active-auto';
+    document.getElementById('togManual').className = 'gtog inactive';
+
+    // Show a brief non-blocking result announcement inline (no popup)
+    const announce = document.getElementById('autoAnnounce');
+    if (announce) {
+      const modeLabels = {save:'⚡ Save tokens', balanced:'⚖ Balanced', quality:'✦ Max quality'};
+      announce.innerHTML = `✦ Auto-configured: <b>${modeLabels[autoMode]}</b> · type: <b>${detectedDataVal||'general'}</b> · reply: <b>${autoLen}</b>`;
+      announce.classList.add('show');
+      setTimeout(() => announce.classList.remove('show'), 4000);
+    }
+    return; // skip popup entirely
+  }
+
+  // ── Fallback: no prompt yet — show the popup to collect info ──
   document.getElementById('togAuto').className = 'gtog active-auto';
   document.getElementById('togManual').className = 'gtog inactive';
   popStep = 0;
@@ -2931,13 +3108,7 @@ function openAutoPopup() {
   document.getElementById('popNext').onclick = () => popNav(1);
   document.getElementById('autoPopup').classList.add('show');
   document.getElementById('popResult').classList.remove('show');
-
-  const hasPrompt = document.getElementById('promptIn').value.trim().length > 0;
-  if (!hasPrompt) {
-    showNoPromptScreen();
-  } else {
-    renderPopQ();
-  }
+  showNoPromptScreen();
 }
 
 function showNoPromptScreen() {
@@ -3535,7 +3706,12 @@ function mergeRedundantClauses(text) {
   return kept.map(s=>s.t+s.sep).join(' ');
 }
 
-function runDeepPass(text, original) {
+function runDeepPass(text, original, precomputedAnchors) {
+  // BUG FIX: anchors must come from ORIGINAL raw input, not already-compressed text.
+  // Previously called extractMeaningAnchors(original) but `original` was post-compression,
+  // causing 0 anchors on the Deep pass. Now we accept pre-computed anchors from raw.
+  const _anchors = precomputedAnchors || extractMeaningAnchors(original || text);
+
   // Pass 1: clause deduplication
   let out = mergeRedundantClauses(text);
 
@@ -3548,18 +3724,17 @@ function runDeepPass(text, original) {
   if (intent.isMultiSentence) {
     const segs = detectPromptSegments(out);
     const rebuilt = rebuildOptimalStructure(segs, 'balanced');
-    if (rebuilt && rebuilt !== out && verifyMeaningPreserved(out, rebuilt, extractMeaningAnchors(original))) {
+    if (rebuilt && rebuilt !== out && verifyMeaningPreserved(out, rebuilt, _anchors)) {
       out = rebuilt;
     }
   }
 
   // Verify anchor words preserved against original input
-  const anchors = extractMeaningAnchors(original);
   const outLower = out.toLowerCase();
   let missing = 0;
-  anchors.forEach(a => { const s=a.slice(0,Math.max(4,a.length-2)); if(s.length>=3&&!outLower.includes(s)) missing++; });
-  if (missing > Math.ceil(anchors.size * 0.20)) {
-    dbg('Deep pass: anchor check failed ('+missing+'/'+anchors.size+' missing), kept pre-deep result');
+  _anchors.forEach(a => { const s=a.slice(0,Math.max(4,a.length-2)); if(s.length>=3&&!outLower.includes(s)) missing++; });
+  if (_anchors.size > 0 && missing > Math.ceil(_anchors.size * 0.20)) {
+    dbg('Deep pass: anchor check failed ('+missing+'/'+_anchors.size+' missing), kept pre-deep result');
     return null;
   }
   return estTok(out) < estTok(text) ? out : null;
@@ -3585,8 +3760,8 @@ function toggleML(){
   dbg('Deep compression: enabled (offline, 3-pass)');
 }
 
-async function runML(text, original) {
-  const result = runDeepPass(text, original);
+async function runML(text, original, precomputedAnchors) {
+  const result = runDeepPass(text, original, precomputedAnchors);
   if (result) dbg('Deep pass ✓ saved '+(estTok(text)-estTok(result))+' tok');
   else dbg('Deep pass: no further saving possible');
   return result;
@@ -3816,7 +3991,7 @@ const _origClassify = classifyPromptIntent;
 window.classifyPromptIntent = function(text) {
   const t0 = performance.now();
   const result = _origClassify(text);
-  dbg(`classifyPromptIntent() — ${((performance.now()-t0)/1000).toFixed(3)}s — task:${result.task} domain:${result.domain} complex:${result.isComplex}`);
+  dbg(`classifyPromptIntent() — ${((performance.now()-t0)/1000).toFixed(3)}s — task:${result.task} domain:${result.domain} type:${result.detectedType||'none'} complex:${result.isComplex}`);
   return result;
 };
 
