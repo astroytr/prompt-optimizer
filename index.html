@@ -813,11 +813,30 @@ const SPELL = {
   // internet slang → remove (empty = stripped by spell)
   lol:'',lmao:'',lmfao:'',omg:'',omfg:'',wtf:'',smh:'',bruh:'',
   ngl:'',tbh:'',imo:'',imho:'',irl:'',fwiw:'',
-  ya:'you',u:'you',ur:'your',
-  cuz:'because',cos:'because',bc:'because',
+  // comprehensive shorthand expansions
+  u:'you',ur:'your',r:'are',y:'why',
+  rn:'right now',imo:'in my opinion',ngl:'not gonna lie',
+  tbh:'to be honest',iirc:'if i recall correctly',
+  afaik:'as far as i know',imo:'in my opinion',
+  fyi:'for your information',asap:'as soon as possible',
+  btw:'by the way',aka:'also known as',
+  imo:'in my opinion',smh:'shaking my head',
+  cya:'see you',ttyl:'talk to you later',
+  gtg:'got to go',brb:'be right back',
+  irl:'in real life',nvm:'never mind',
+  ikr:'i know right',imo:'in my opinion',
+  idk:'i don\'t know',idc:'i don\'t care',
+  imo:'in my opinion',omw:'on my way',
+  istg:'i swear to god',imo:'in my opinion',
+  fr:'for real',lowkey:'somewhat',highkey:'very',
+  rly:'really',tho:'though',thru:'through',
+  w:'with',wo:'without',b4:'before',
+  2:'to',4:'for',8:'ate',
+  cuz:'because',cos:'because',bc:'because',coz:'because',
   gonna:'going to',gotta:'got to',wanna:'want to',
   hafta:'have to',kinda:'kind of',sorta:'sort of',
-  ya:"",yea:'',yah:'',nah:'',meh:'',
+  dunno:"don't know",lemme:'let me',gimme:'give me',
+  ya:'you',yea:'',yah:'',nah:'no',meh:'',
   arcadey:'arcade-style',elment:'element',spped:'speed',
   realstic:'realistic',realstick:'realistic',
   behaviour:'behavior',behaviours:'behaviors',
@@ -943,6 +962,23 @@ const SPELL = {
   plss:'please',
   eaat:'eat',
   performace:'performance',optimiation:'optimization',
+  // ── BLOCK: words the normalizer handles but spell may still corrupt ──
+  // These map to themselves to prevent codespell/LanguageTool overrides
+  storry:'story',storrry:'story',storyyy:'story',storryyy:'story',
+  reely:'really',reelyyy:'really',reellyy:'really',
+  falleed:'fell',falleedd:'fell',faleed:'fell',
+  angrey:'angry',angreyy:'angry',angreyyy:'angry',
+  scarry:'scary',scarrry:'scary',
+  meen:'mean',meenn:'mean',
+  gose:'goes',gosee:'goes',
+  somthing:'something',somthinggg:'something',
+  twisstty:'twisty',twissttyyy:'twisty',
+  evryywhere:'everywhere',evryywheree:'everywhere',
+  // ── BLOCK: protect internet vernacular from over-correction ──
+  pew:'pew',  // never correct "pew" to anything
+  smol:'small',boi:'boy',
+  // ── BLOCK: protect creative emotional words ──
+  twisty:'twisty',whoa:'whoa',woah:'whoa',
 };
 
 // ═══════════════════════════════════════════
@@ -1138,7 +1174,7 @@ const FILLERS = [
   [/-{3,}/g,'—'],
   [/\s{2,}!+/g,' '],
   [/([.!?,;:])\s*\1+/g,'$1'],
-  [/\b(maybe|perhaps|possibly|conceivably|presumably)\s+/gi,''],
+  [/\b(maybe|perhaps|possibly|conceivably|presumably)\s+(?!(?:funny|sad|scary|twisty|dark|light|epic|dramatic|emotional|intense|shocking|surprising|mysterious|spooky|fast|slow|short|long|quick)\b)/gi,''],
   [/\b(just|simply|basically|essentially|literally|actually|really|very|quite|rather|even)\s+(?!css\b|js\b|html\b|typescript\b|python\b|vanilla\b|pure\b|one\b|two\b|three\b|once\b)(?=[a-z])/gi,''],
   [/\b(kind of|kinda|sort of|sorta|a bit|a little|somewhat|rather)\s+/gi,''],
   // Discourse fillers
@@ -1672,11 +1708,12 @@ function classifyPromptIntent(text) {
 
   // Domain — gamedev checked BEFORE code since pygame/python would match code first
   const domainSignals = {
-    gamedev: /\b(game|physics|engine|player|sprite|collision|velocity|drift|steering|wheel|tire|grip|suspension|acceleration|torque|pygame|unity|godot|phaser|raylib)\b/,
-    code:    /\b(function|class|variable|loop|array|api|javascript|typescript|java|css|html|sql|bash|json|react|node|code|script|program)\b/,
-    writing: /\b(essay|article|blog|story|poem|narrative|draft|paragraph|tone|style|voice|audience|character|plot)\b/,
-    data:    /\b(data|dataset|csv|json|table|row|column|database|query|schema|sql|pandas|dataframe)\b/,
-    general: /.*/,
+    gamedev:  /\b(game|physics|engine|player|sprite|collision|velocity|drift|steering|wheel|tire|grip|suspension|acceleration|torque|pygame|unity|godot|phaser|raylib)\b/,
+    code:     /\b(function|class|variable|loop|array|api|javascript|typescript|java|css|html|sql|bash|json|react|node|code|script|program)\b/,
+    creative: /\b(story|storry|tale|adventure|fiction|sci-?fi|space|alien|character|plot|twist|ending|scene|fight|explosion|scary|funny|sad|emotional|chase|laser|battle|hero|villain|monster|robot|dragon|magic|quest|journey)\b/,
+    writing:  /\b(essay|article|blog|poem|narrative|draft|paragraph|tone|style|voice|audience)\b/,
+    data:     /\b(data|dataset|csv|json|table|row|column|database|query|schema|sql|pandas|dataframe)\b/,
+    general:  /.*/,
   };
   // Score each domain by match count, pick highest
   let domain = 'general';
@@ -1800,6 +1837,11 @@ function detectPromptSegments(text) {
     if (/^(write|create|build|fix|debug|explain|analyze|list|compare|generate|make|give|show|find|implement|design|convert|translate|summarize|review|evaluate|optimize|refactor)\b/i.test(s.trim())) {
       role = 'instruction';
     } else if (/\b(must|don't|only|never|always|make sure|ensure|no |not |avoid|without|don't use|format:|style:|tone:|length:|output:)\b/.test(st)) {
+      role = 'constraint';
+    // Creative style/tone constraints
+    } else if (/\b(make it|keep it|should be|must be|needs to be)\s+(twisty|scary|funny|sad|dark|fast|slow|epic|dramatic|emotional|intense|mysterious|surprising|romantic|tense)\b/.test(st)) {
+      role = 'constraint';
+    } else if (/\b(fast.?paced|slow.?burn|bittersweet|mind.?bending|plot.?twist|twist ending|open ending|happy ending|sad ending|cliffhanger|not slow|keep it fast|do fast)\b/.test(st)) {
       role = 'constraint';
     } else if (/\b(for example|e\.g\.|such as|like:|sample:|example:)\b/.test(st) || /^["'`]/.test(s.trim())) {
       role = 'example';
@@ -1940,7 +1982,9 @@ function nlpCompress(text, mode) {
   }
 
   // PHASE 2: Budget controller (save+balanced, prompts >40 words)
-  if (text.split(/\s+/).filter(Boolean).length > 40 && (mode === 'save' || mode === 'balanced')) {
+  // Skip for creative/story prompts — budget controller treats mood/tone words as filler
+  const isCreative = intent.domain === 'creative' || intent.task === 'generate' && intent.domain === 'general';
+  if (!isCreative && text.split(/\s+/).filter(Boolean).length > 40 && (mode === 'save' || mode === 'balanced')) {
     const controlled = budgetController(text, intent, mode === 'save' ? 0.25 : 0.15);
     if (controlled && controlled !== text && estTok(controlled) < estTok(text) && fastVerify(controlled)) {
       actions.push(`budget controller: ~${estTok(text) - estTok(controlled)} tok`);
@@ -2200,72 +2244,95 @@ function normalizeInformalPrompt(text) {
   // 1. Strip emojis first
   let clean = _stripEmoji(text);
 
-  // 2. Lowercase-normalize common misspellings that block parsing
+  // 2. Fix repeated-letter exaggerations BEFORE spell check gets them
+  //    e.g. "runnnn" → "run", "storyyy" → "story", "alieennss" → "aliens"
+  //    But don't touch valid doubles (see fixRepeated — this is a simpler pre-pass)
+  clean = clean.replace(/\b([a-zA-Z]+?)([a-zA-Z])\2{2,}\b/g, (match, pre, letter) => pre + letter);
+  clean = clean.replace(/\b([a-zA-Z]*?)([a-zA-Z])\2{2,}([a-zA-Z]*)\b/g, (match, pre, letter, post) => pre + letter + post);
+
+  // 3. Quickfix intentional slang/typos that spell-checker will corrupt
+  //    Order matters: longer/more specific patterns first
   const quickFix = [
+    // Strip meta-commentary preambles that add nothing to the actual prompt
+    [/^ok+\s+(this\s+is\s+gonna|this\s+is\s+going\s+to)\s+hurt\s+to\s+read[,.]?\s*/gi, ''],
+    [/^this\s+is\s+going\s+to\s+hurt\s+to\s+read[,.]?\s*/gi, ''],
+    [/^ok+\s*[,.]?\s*/gi, ''],
+    [/^so\s+basically\s*/gi, ''],
+    [/^like\s+ok\s*/gi, ''],
+    // Phonetic connectors — must go before spell runs
     [/\bnd\b/gi, 'and'],
-    [/\bwit\b(?=\s+[a-z])/gi, 'with'],
-    [/\blik\b(?=\s+[a-z])/gi, 'like'],
-    [/\bgose\b/gi, 'goes'],
-    [/\bses\b/gi, 'sees'],
-    [/\breely\b/gi, 'really'],
-    [/\bmeen\b/gi, 'mean'],
-    [/\bangrey\b/gi, 'angry'],
-    [/\bwit\b/gi, 'with'],
-    [/\btwisstty\b/gi, 'twisty'],
-    [/\btwisstted\b/gi, 'twisted'],
-    [/\bevryywhere\b/gi, 'everywhere'],
-    [/\bevryy\b/gi, 'every'],
-    [/\bsmol\b/gi, 'small'],
+    [/\bn\b(?=\s+[a-z])/gi, 'and'],  // "cry n sad"
+    [/\bwit\b(?=\s)/gi, 'with'],
+    [/\blik\b(?=\s)/gi, 'like'],
     [/\bidk\b/gi, '(you decide)'],
     [/\bpls\b/gi, 'please'],
-    [/\babot\b/gi, 'about'],
-    [/\batt\b/gi, 'at'],
-    [/\bbutt\b(?=\s+also|\s+make|\s+it|\s+the|\s+a\b)/gi, 'but'],
-    [/\blik\b/gi, 'like'],
-    [/\bwit\b/gi, 'with'],
-    [/\btoo\b(?=\s+spase|\s+space)/gi, 'to'],
-    [/\bspase\b/gi, 'space'],
-    [/\balieen(s?)\b/gi, 'alien$1'],
-    [/\blazerz\b/gi, 'lasers'],
-    [/\bexplotion\b/gi, 'explosion'],
-    [/\bscarry\b/gi, 'scary'],
-    [/\bfuny\b/gi, 'funny'],
-    [/\bfunyy\b/gi, 'funny'],
-    [/\bsam\b(?=\s+time)/gi, 'same'],
+    [/\bplss+\b/gi, 'please'],
+    [/\bsmol\b/gi, 'small'],
+    [/\bboi\b/gi, 'boy'],
     [/\bwroite\b/gi, 'write'],
     [/\bwrit\b(?=\s+me|\s+a|\s+an)/gi, 'write'],
-    [/\bstorry\b/gi, 'story'],
-    [/\bboi\b/gi, 'boy'],
-    [/\bgose\b/gi, 'goes'],
-    [/\bpew\s+pew\b/gi, 'laser fire'],
-    [/\brun\s+run\b/gi, 'runs'],
-    [/\bcry\s+n\s+sad\b/gi, 'emotional and sad'],
-    [/\bwit\s+echho\s+echo\b/gi, 'with an eerie echo'],
-    [/\bechho\s+echo\b/gi, 'eerie echo'],
-    [/\bwit\b/gi, 'with'],
-    [/\batt\s+sam\s+time\b/gi, 'at the same time'],
-    [/\bwoah\b/gi, 'wow'],
-    [/\bjust\s+happened\?{1,}/gi, 'just happened?'],
-    [/\bmaybbe\b/gi, 'maybe'],
-    [/\b(tripple|trippple)\b/gi, 'triple'],
+    // Intentional misspellings that become wrong words under spell correction
+    [/\bstorr+y+\b/gi, 'story'],        // "storyyy", "storryyy" → never "sorry"
+    [/\bstory+\b/gi, 'story'],
+    [/\breely+\b/gi, 'really'],         // "reely", "reelyyy" → never "freely"
+    [/\breal+y+\b(?!\s+estate)/gi, 'really'],
+    [/\bfall+e+d+\b/gi, 'fell'],        // "falleedd", "falleed" → never "called"
+    [/\btripp+e*d+\b/gi, 'tripped'],    // "tripppp" → "tripped"
+    [/\bfall+\b(?=\s+bad)/gi, 'fell'],
+    [/\bmeen\b/gi, 'mean'],
+    [/\bangrey+\b/gi, 'angry'],
+    [/\bgose+\b/gi, 'goes'],
+    [/\bses+\b(?=\s+alien)/gi, 'sees'],
+    [/\btwisstty+\b/gi, 'twisty'],
+    [/\bevryywhere+\b/gi, 'everywhere'],
+    [/\bevryy+\b/gi, 'every'],
+    [/\balieen+s?\b/gi, 'aliens'],
+    [/\balien+s?\b/gi, 'aliens'],        // "alieenns" already caught above but just in case
+    [/\blazerz+\b/gi, 'lasers'],
+    [/\blazer+s?\b/gi, 'lasers'],
+    [/\bexplotion+\b/gi, 'explosion'],
+    [/\bscarry+\b/gi, 'scary'],
+    [/\bsomthinggg+\b/gi, 'something'],
+    [/\bsomthing+\b/gi, 'something'],
+    [/\bdecied+\b/gi, 'decide'],
+    [/\babot\b/gi, 'about'],
+    [/\batt\b(?=\s+sam|\s+end|\s+same)/gi, 'at'],
+    [/\bsam\b(?=\s+time)/gi, 'same'],
+    [/\bbutt\b(?=\s+also|\s+make|\s+it|\s+the|\s+a\b)/gi, 'but'],
+    [/\btoo\b(?=\s+spas|\s+space)/gi, 'to'],
+    [/\bspase+\b/gi, 'space'],
+    [/\bmaybbe+\b/gi, 'maybe'],
+    [/\bwoah+\b/gi, 'wow'],
+    [/\bwat+\b(?=\s+just)/gi, 'what'],
+    [/\bhappend+\b/gi, 'happened'],
+    [/\beccho+\b/gi, 'echo'],
+    [/\buchoo+\b/gi, 'echo'],
+    // Multi-word casual phrases → clean equivalents
+    [/\bpew\s+pew+\b/gi, 'laser blasts'],
+    [/\brun+\s+run+\b/gi, 'runs frantically'],
+    [/\bcry\s+n\s+sad+\b/gi, 'emotional and sad'],
+    [/\bwit+\s+ech+o+\s+ech+o+\b/gi, 'with an eerie echo'],
+    [/\bech+o+\s+ech+o+\b/gi, 'eerie echo'],
+    [/\batt+\s+sam+\s+tim+e+\b/gi, 'at the same time'],
+    [/\bat\s+end\b/gi, 'at the end'],
+    [/\bmake\s+it\s+twisty+\s+twisty+\b/gi, 'make it twisty'],
+    [/\bdo\s+fast\b/gi, 'keep it fast-paced'],
+    [/\bno\s+slow\b/gi, 'not slow'],
   ];
   quickFix.forEach(([r, v]) => { clean = clean.replace(r, v); });
 
-  // 3. Split into clauses on major connectors + "then X"
-  // Use a lookahead split so we don't lose the clause-starting word
-  // Split boundaries: "and then", "but then", "then", "but", standalone "and" between long clauses
-  const splitRe = /\s*,?\s*(?:and\s+then|but\s+then|and\s+also|then\s+big|then\s+he|then\s+boom|then\s+something|then\s+make|then\s+at\s+end|then\s+the\s+alien|at\s+end\s+make|at\s+the\s+end)\s*/gi;
-  let clauses = clean.split(splitRe).map(c => c.trim()).filter(c => c.split(/\s+/).length >= 3);
+  // 4. Split into clauses on major connectors
+  //    Covers: "and then", "but then", "then X", "at the end", sentence-level "and"
+  const splitRe = /\s*,?\s*(?:and\s+then|but\s+then|and\s+also|then\s+(?:big|he|boom|something|make|at|the)|at\s+the\s+end)\s*/gi;
+  let clauses = clean.split(splitRe).map(c => c.trim()).filter(c => c.split(/\s+/).filter(Boolean).length >= 3);
 
-  // If splitting didn't work well (e.g. only 1 clause), return cleaned text without restructuring
   if (clauses.length < 2) {
-    // Still return the cleaned/fixed text
     return { text: clean.replace(/\s{2,}/g,' ').trim(), normalized: true };
   }
 
-  // 4. Capitalise each clause and end with punctuation
+  // 5. Capitalise each clause and punctuate
   clauses = clauses.map(c => {
-    c = c.trim();
+    c = c.trim().replace(/\s{2,}/g,' ');
     if (!c) return '';
     c = c.charAt(0).toUpperCase() + c.slice(1);
     if (!/[.!?]$/.test(c)) c += '.';
@@ -2306,6 +2373,9 @@ async function optimize() {
     text = normText;
     changes.push({tag:'rewritten', msg:'Informal prompt restructured into sentences for better parsing.'});
   }
+  // Post-normalizer cleanup: remove stray single uppercase letters (e.g. "N" artifact from nd→and mid-text)
+  text = text.replace(/(?<=[a-z.,!?]\s)[A-Z](?=\s[a-z])/g, '');
+  text = text.replace(/\s{2,}/g, ' ').trim();
 
   // ── Always-on: dedup + spell + repeated letters ──
   const { text: dd, removed: ddN } = deduplicate(text);
@@ -2327,8 +2397,11 @@ async function optimize() {
     changes.push({tag:'fixed', msg:`Fixed ${spN} spelling issue(s)${saved>0?' — saved ~'+saved+' tokens':''}.`});
   }
 
-    // Online spell via LanguageTool — 2s timeout, full-text contextual check
-    if (isOnline) {
+    // Online spell via LanguageTool — skip for creative/story prompts:
+    // LanguageTool has no context about creative generation and corrupts intentional style
+    const _intentForSpell = classifyPromptIntent(text);
+    const _skipOnlineSpell = _intentForSpell.domain === 'creative' || wasNormalized;
+    if (isOnline && !_skipOnlineSpell) {
       try {
         const { text: osp, fixes: ospN } = await Promise.race([
           onlineSpellCorrect(text),
@@ -2591,6 +2664,9 @@ async function optimize() {
   }
 
   // ── XML wrapping for quality mode (after Deep, on clean text) ──
+  // Per Anthropic's prompt engineering guidelines: use <instructions> for task steps,
+  // <context> for background, <constraints> for rules, <examples> for few-shot examples.
+  // Quality mode always wraps in <instructions> at minimum — this is the core value add.
   let xmlText = text;
   if (mode === 'quality') {
     const segments2 = detectPromptSegments(text);
@@ -2599,20 +2675,40 @@ async function optimize() {
     const hasSepCtx2 = byRole2.context.length > 0 && byRole2.instruction.length > 0;
     const hasConstr2 = byRole2.constraint.length > 0;
     const hasEx2     = byRole2.example.length > 0;
-    const worthXML2  = hasSepCtx2 || hasConstr2 || hasEx2;
     let body2 = '';
-    if (worthXML2 && hasSepCtx2) {
-      body2 = `<context>\n${byRole2.context.join(' ')}\n</context>\n\n<instructions>\n${[...byRole2.instruction, ...byRole2.question, ...byRole2.other].join(' ')}\n</instructions>`;
+
+    if (hasSepCtx2) {
+      // Has distinct context + instructions → full structure
+      const instrContent = [...byRole2.instruction, ...byRole2.question, ...byRole2.other].join(' ');
+      body2 = `<context>\n${byRole2.context.join(' ')}\n</context>\n\n<instructions>\n${instrContent}\n</instructions>`;
       if (hasConstr2) body2 += `\n\n<constraints>\n${byRole2.constraint.join('. ')}\n</constraints>`;
-      if (hasEx2)     body2 += `\n\n<example>\n${byRole2.example.join(' ')}\n</example>`;
-      xmlText = body2;
-    } else if (worthXML2 && hasConstr2) {
-      // Only put non-constraint sentences in <instructions> to avoid duplication
+      if (hasEx2)     body2 += `\n\n<examples>\n${byRole2.example.join('\n')}\n</examples>`;
+    } else if (hasConstr2) {
+      // Has constraints but no separate context — split instructions from constraints
       const instrParts = [...byRole2.instruction, ...byRole2.question, ...byRole2.other];
       const instrText = instrParts.length > 0 ? instrParts.join(' ') : text;
       body2 = `<instructions>\n${instrText}\n</instructions>\n\n<constraints>\n${byRole2.constraint.join('. ')}\n</constraints>`;
-      xmlText = body2;
+      if (hasEx2) body2 += `\n\n<examples>\n${byRole2.example.join('\n')}\n</examples>`;
+    } else {
+      // No special structure detected — always wrap in <instructions> at minimum.
+      // For creative/story prompts, also add a <style> tag when tone/mood constraints exist.
+      const creativeIntent = classifyPromptIntent(text);
+      const isCreativePrompt = creativeIntent.domain === 'creative';
+      // Extract any creative constraint sentences for a separate <style> block
+      const creativeConstraintRe = /\b(make it|keep it|should be|fast.?paced|slow.?burn|bittersweet|twisty|scary|funny|emotional|dark|epic|dramatic|intense|plot.?twist|happy ending|sad ending|open ending|cliffhanger)\b/i;
+      const allSents = text.split(/[.!?]+\s*/).filter(s => s.trim().length > 3);
+      const styleSents = isCreativePrompt ? allSents.filter(s => creativeConstraintRe.test(s)) : [];
+      const mainSents  = isCreativePrompt ? allSents.filter(s => !creativeConstraintRe.test(s)) : allSents;
+      if (isCreativePrompt && styleSents.length > 0) {
+        body2  = `<instructions>\n${mainSents.join('. ')}\n</instructions>`;
+        body2 += `\n\n<style>\n${styleSents.join('. ')}\n</style>`;
+      } else {
+        body2 = `<instructions>\n${text}\n</instructions>`;
+      }
+      if (hasEx2) body2 += `\n\n<examples>\n${byRole2.example.join('\n')}\n</examples>`;
     }
+
+    xmlText = body2;
     // fileNames appended after XML
     if (fileNames.length) xmlText += '\n\nAttached: ' + fileNames.join(', ');
   } else if (fileNames.length) {
@@ -2681,7 +2777,14 @@ function goto_output(raw, final, changes, spellFixes, replyLen, mode, type, dete
   if (saved>3)       chips.push({c:'g',t:`−${saved} tok saved`});
   if (addedT>3)      chips.push({c:'r',t:`+${addedT} tok added`});
   if (spellFixes>0)  chips.push({c:'a',t:`${spellFixes} spelling fixes`});
-  if (mode==='quality') chips.push({c:'p',t:'XML structured'});
+  if (mode==='quality') {
+    // Determine which XML structure was applied
+    const xmlTags = ['<instructions>'];
+    if (final.includes('<context>')) xmlTags.unshift('<context>');
+    if (final.includes('<constraints>')) xmlTags.push('<constraints>');
+    if (final.includes('<examples>')) xmlTags.push('<examples>');
+    chips.push({c:'p', t: xmlTags.join(' + ')});
+  }
   if (detectedIntent) {
     chips.push({c:'b',t:`intent: ${detectedIntent.task}`});
     if (detectedIntent.domain !== 'general') chips.push({c:'b',t:`domain: ${detectedIntent.domain}`});
@@ -3494,12 +3597,21 @@ async function runML(text, original) {
 // ═══════════════════════════════════════════
 const _DOMAIN_NOUNS_RE = /\b(gravel|tarmac|asphalt|concrete|dirt|mud|sand|snow|ice|grass|cobblestone|wet|dry|slick|loose|packed|tyre|tire|wheel|axle|chassis|suspension|torque|downforce|camber|oversteer|understeer|drift|grip|traction|slip|throttle|engine|turbo|rpm|gearbox|awd|rwd|fwd|pygame|unity|godot|react|node|python|javascript|typescript)\b/gi;
 
+// Creative/mood vocabulary that must be protected from compression
+const _CREATIVE_PROTECT = new Set([
+  'twisty','twist','scary','spooky','eerie','echo','funny','sad','emotional','angry','mean',
+  'explosion','fight','battle','chase','laser','lasers','aliens','alien','space','boy','small',
+  'fast','slow','crazy','badly','frantically','simultaneously','whoa','wow','boom','suddenly',
+  'dark','light','loud','quiet','mystery','mysterious','dramatic','intense','epic','exciting',
+  'shocking','surprising','unexpected','reveal','climax','tension','horror','comedy','tragedy',
+]);
+
 function extractMeaningAnchors(text) {
   const anchors = new Set();
   // Numbers with units
   (text.match(/\b\d[\d.,]*(?:km|mph|fps|px|ms|kb|mb|gb|%|hz)?\b/gi)||[]).forEach(n=>anchors.add(n.trim().toLowerCase()));
   // Quoted phrases
-  (text.match(/(?:^|[\s(])([""\`])([^""\`]{2,40})\1/g)||[]).forEach(q=>anchors.add(q.replace(/[""\`]/g,'').trim().toLowerCase()));
+  (text.match(/(?:^|[\s(])([""` + "`" + ```])([^""` + "`" + ```]{2,40})\1/g)||[]).forEach(q=>anchors.add(q.replace(/[""` + "`" + ```]/g,'').trim().toLowerCase()));
   // Proper nouns — skip words with 3+ repeated chars (exaggeration noise)
   (text.match(/\b[A-Z][a-z]{2,}\b/g)||[])
     .filter(w => !/([a-zA-Z])\1{2,}/.test(w))
@@ -3512,6 +3624,10 @@ function extractMeaningAnchors(text) {
   (text.match(_DOMAIN_NOUNS_RE)||[]).forEach(w=>anchors.add(w.toLowerCase()));
   // File references
   (text.match(/\b\w+\.(js|ts|py|css|html|json|md|txt|jsx|tsx|vue|rb|go|rs|cpp|sql|sh|yaml)\b/gi)||[]).forEach(id=>anchors.add(id.toLowerCase()));
+  // Creative/mood vocabulary — protect these from compression
+  (text.toLowerCase().match(/\b[a-z]{3,}\b/g)||[])
+    .filter(w => _CREATIVE_PROTECT.has(w))
+    .forEach(w => anchors.add(w));
   // Purge garbage: repeated-char words and very short entries
   anchors.forEach(a => { if (/([a-z])\1{2,}/.test(a) || a.length < 3) anchors.delete(a); });
   return anchors;
